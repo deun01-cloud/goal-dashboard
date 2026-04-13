@@ -516,7 +516,7 @@ function addYearGoal(){
   document.getElementById('yr-new').value='';
   renderYearGoals(); saveState();
 }
-function delYearGoal(i){ if(!confirm('삭제할까요?')) return; state.yearGoals.splice(i,1); renderYearGoals(); saveState(); }
+function delYearGoal(i){ state.yearGoals.splice(i,1); renderYearGoals(); saveState(); }
 
 /* ============================================================
    QUARTER GOALS
@@ -558,7 +558,7 @@ function addQGoal(qi){
   state.qGoals[qi].push({text:v, done:false});
   inp.value=''; renderQGoals(); saveState();
 }
-function delQGoal(qi,gi){ if(!confirm('삭제할까요?')) return; state.qGoals[qi].splice(gi,1); renderQGoals(); saveState(); }
+function delQGoal(qi,gi){ state.qGoals[qi].splice(gi,1); renderQGoals(); saveState(); }
 
 /* ============================================================
    MONTH GOALS
@@ -586,7 +586,7 @@ function addMonthGoal(){
   document.getElementById('mo-new').value=''; renderMonthGoals(); saveState();
 }
 function toggleMGoal(i){ state.monthGoals[state.selMonth][i].done=!state.monthGoals[state.selMonth][i].done; renderMonthGoals(); saveState(); }
-function delMGoal(i){ if(!confirm('삭제할까요?')) return; state.monthGoals[state.selMonth].splice(i,1); renderMonthGoals(); saveState(); }
+function delMGoal(i){ state.monthGoals[state.selMonth].splice(i,1); renderMonthGoals(); saveState(); }
 
 /* ============================================================
    DAILY TASKS
@@ -647,7 +647,6 @@ function addDailyTask(){
   renderDailyTasks(); renderCal(); saveState();
 }
 function delDailyTask(ds, id){
-  if(!confirm('삭제할까요?')) return;
   state.dailyTasks[ds]=(state.dailyTasks[ds]||[]).filter(function(x){return x.id!==id;});
   renderDailyTasks(); renderCal(); saveState();
 }
@@ -696,7 +695,6 @@ function toggleMonthlyTask(id){
   if(t) t.done=!t.done; renderMonthlyTasks(); saveState();
 }
 function delMonthlyTask(id){
-  if(!confirm('삭제할까요?')) return;
   state.monthlyTasks[state.mclMonth]=(state.monthlyTasks[state.mclMonth]||[]).filter(function(x){return x.id!==id;});
   renderMonthlyTasks(); saveState();
 }
