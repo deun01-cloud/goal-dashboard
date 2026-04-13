@@ -160,13 +160,13 @@
     <h1>목표 · 업무 대시보드</h1>
     <span class="save-indicator" id="save-indicator">저장됨 ✓</span>
   </div>
-  <p class="subtitle">연간 · 분기 · 월별 목표 관리 및 일간 · 월간 체크리스트 — 데이터는 이 기기에 자동 저장됩니다</p>
+  <p class="subtitle">연간 · 분기 목표 관리 및 일간 · 월간 업무 관리 — 데이터는 이 기기에 자동 저장됩니다</p>
 
   <div class="tabs">
     <button class="tab active" onclick="goTab('dash',this)">대시보드</button>
     <button class="tab" onclick="goTab('goals',this)">목표 관리</button>
-    <button class="tab" onclick="goTab('daily',this)">일간 체크리스트</button>
-    <button class="tab" onclick="goTab('monthly-cl',this)">월간 체크리스트</button>
+    <button class="tab" onclick="goTab('daily',this)">일간 업무</button>
+    <button class="tab" onclick="goTab('monthly-cl',this)">월간 업무</button>
   </div>
 
   <!-- ===== DASHBOARD ===== -->
@@ -199,15 +199,15 @@
       </div>
     </div>
 
-    <!-- 오늘 할 일 요약 -->
+    <!-- 오늘 업무 요약 -->
     <div class="card">
-      <div class="card-title">오늘 할 일 요약</div>
+      <div class="card-title">오늘 업무 요약</div>
       <div id="dash-today-summary"></div>
     </div>
 
-    <!-- 이번 달 목표 -->
+    <!-- 이번 달 업무 -->
     <div class="card">
-      <div class="card-title">이번 달 목표</div>
+      <div class="card-title">이번 달 업무</div>
       <div id="dash-month-goals"></div>
     </div>
 
@@ -238,21 +238,12 @@
       <div class="card-title" style="margin-bottom:14px;">분기별 목표</div>
       <div class="grid2" id="q-goals-wrap"></div>
     </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:10px;">월별 목표</div>
-      <div class="month-sel" id="month-sel-btns"></div>
-      <div id="month-goal-list"></div>
-      <div class="add-row">
-        <input type="text" id="mo-new" placeholder="새 월별 목표 입력..." onkeydown="if(event.key==='Enter')addMonthGoal()">
-        <button class="btn btn-primary" onclick="addMonthGoal()">+ 추가</button>
-      </div>
-    </div>
   </div>
 
   <!-- ===== DAILY ===== -->
   <div id="daily" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <span class="section-title" style="margin-bottom:0;">일간 체크리스트</span>
+      <span class="section-title" style="margin-bottom:0;">일간 업무</span>
       <div style="display:flex;align-items:center;gap:8px;">
         <input type="date" id="daily-date-picker" style="border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;cursor:pointer;">
         <span style="font-size:13px;color:var(--purple);" id="daily-date-label"></span>
@@ -267,7 +258,7 @@
     <div class="card">
       <div id="daily-list"></div>
       <div class="add-row" style="margin-top:10px;">
-        <input type="text" id="daily-new" placeholder="새 할 일 추가..." onkeydown="if(event.key==='Enter')addDailyTask()">
+        <input type="text" id="daily-new" placeholder="새 업무 추가..." onkeydown="if(event.key==='Enter')addDailyTask()">
         <select id="daily-tag"><option value="w">업무</option><option value="p">개인</option><option value="h">건강</option><option value="m">미팅</option><option value="s">학습</option></select>
         <select id="daily-pri"><option value="high">높음</option><option value="mid">보통</option><option value="low">낮음</option></select>
         <button class="btn btn-primary" onclick="addDailyTask()">추가</button>
@@ -275,10 +266,10 @@
     </div>
   </div>
 
-  <!-- ===== MONTHLY CL ===== -->
+  <!-- ===== MONTHLY ===== -->
   <div id="monthly-cl" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-      <span class="section-title" style="margin-bottom:0;">월간 체크리스트</span>
+      <span class="section-title" style="margin-bottom:0;">월간 업무</span>
     </div>
     <div class="month-sel" id="mcl-month-sel"></div>
     <div class="stats-row">
@@ -421,31 +412,37 @@ function renderDashboard(){
   }
   document.getElementById('dash-q-goals').innerHTML = qHtml;
 
-  // 6-1) 이번 달 목표 리스트
+  // 6-1) 이번 달 업무 (월간 업무 탭 데이터 기준)
   var curM = TODAY.getMonth();
-  var mGoals = state.monthGoals[curM]||[];
-  var mGDone = mGoals.filter(function(g){return g.done;}).length;
+  var mTasks2 = state.monthlyTasks[curM]||[];
+  var mTDone = mTasks2.filter(function(t){return t.done;}).length;
   var mGHtml = '<div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">'
     +'<span style="font-size:13px;font-weight:500;color:var(--text);">'+(curM+1)+'월</span>'
-    +'<span style="font-size:12px;color:var(--text2);">'+mGDone+' / '+mGoals.length+' 완료</span>'
+    +'<span style="font-size:12px;color:var(--text2);">'+mTDone+' / '+mTasks2.length+' 완료</span>'
     +'</div>';
-  if(mGoals.length===0){
-    mGHtml += '<div style="color:var(--text3);font-size:13px;">월별 목표를 추가해보세요</div>';
+  if(mTasks2.length===0){
+    mGHtml += '<div style="color:var(--text3);font-size:13px;">월간 업무 탭에서 업무를 추가해보세요</div>';
   } else {
-    mGoals.forEach(function(g,gi){
+    var mSorted = mTasks2.slice().sort(function(a,b){
+      if(a.done !== b.done) return a.done ? 1 : -1;
+      var po={high:0,mid:1,low:2};
+      return (po[a.pri||'low']||2) - (po[b.pri||'low']||2);
+    });
+    mSorted.forEach(function(t){
       mGHtml += '<div class="item-row">'
-        +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleMGoalDash('+curM+','+gi+')"></div>'
-        +'<span class="item-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthlyTaskDash('+t.id+')"></div>'
+        +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+        +'<span class="'+priCls(t.pri||'low')+'">'+priLabel(t.pri||'low')+'</span>'
         +'</div>';
     });
   }
   document.getElementById('dash-month-goals').innerHTML = mGHtml;
 
-  // 6-2) 오늘 할 일 요약 — todayStr() 기준으로 항상 새로 읽기
+  // 6-2) 오늘 업무 요약 — todayStr() 기준으로 항상 새로 읽기
   var tTasks = state.dailyTasks[todayStr()]||[];
   var summaryHtml = '';
   if(tTasks.length===0){
-    summaryHtml = '<div style="color:var(--text3);font-size:13px;">오늘 할 일이 없습니다</div>';
+    summaryHtml = '<div style="color:var(--text3);font-size:13px;">오늘 업무가 없습니다</div>';
   } else {
     // 우선순위 높음 먼저, 미완료 먼저 정렬
     var sorted = tTasks.slice().sort(function(a,b){
@@ -503,11 +500,13 @@ function toggleQGoalDash(qi, gi){
   if(document.getElementById('goals').classList.contains('active')) renderQGoals();
 }
 
-function toggleMGoalDash(mi, gi){
-  if(!state.monthGoals[mi]) return;
-  state.monthGoals[mi][gi].done = !state.monthGoals[mi][gi].done;
+function toggleMonthlyTaskDash(id){
+  var curM = TODAY.getMonth();
+  var tasks = state.monthlyTasks[curM]||[];
+  var t = tasks.find(function(x){return x.id===id;});
+  if(t) t.done = !t.done;
   renderDashboard(); saveState();
-  if(document.getElementById('goals').classList.contains('active')) renderMonthGoals();
+  if(document.getElementById('monthly-cl').classList.contains('active')) renderMonthlyTasks();
 }
 
 /* ============================================================
@@ -623,30 +622,13 @@ function delQGoal(qi,gi){ state.qGoals[qi].splice(gi,1); renderQGoals(); saveSta
 /* ============================================================
    MONTH GOALS
 ============================================================ */
-function renderMonthGoals(){
-  document.getElementById('month-sel-btns').innerHTML = MONTHS.map(function(m,i){
-    return '<button class="msel-btn'+(i===state.selMonth?' active':'')+'" onclick="selMonth('+i+')">'+m+'</button>';
-  }).join('');
-  var goals = state.monthGoals[state.selMonth]||[];
-  var html = '';
-  goals.forEach(function(g,i){
-    html += '<div class="item-row">'
-      +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleMGoal('+i+')"></div>'
-      +'<span class="item-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
-      +'<button class="del-btn" onclick="delMGoal('+i+')" title="삭제">&#10005;</button>'
-      +'</div>';
-  });
-  document.getElementById('month-goal-list').innerHTML = html || '<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 달의 목표를 추가해보세요</div>';
-}
-function selMonth(i){ state.selMonth=i; renderMonthGoals(); saveState(); }
-function addMonthGoal(){
-  var v = document.getElementById('mo-new').value.trim(); if(!v) return;
-  if(!state.monthGoals[state.selMonth]) state.monthGoals[state.selMonth]=[];
-  state.monthGoals[state.selMonth].push({text:v, done:false});
-  document.getElementById('mo-new').value=''; renderMonthGoals(); saveState();
-}
-function toggleMGoal(i){ state.monthGoals[state.selMonth][i].done=!state.monthGoals[state.selMonth][i].done; renderMonthGoals(); saveState(); }
-function delMGoal(i){ state.monthGoals[state.selMonth].splice(i,1); renderMonthGoals(); saveState(); }
+/* 월별 목표 제거됨 — 함수만 빈 stub으로 유지해 에러 방지 */
+function renderMonthGoals(){}
+function selMonth(){}
+function addMonthGoal(){}
+function toggleMGoal(){}
+function delMGoal(){}
+
 
 /* ============================================================
    DAILY TASKS
@@ -674,7 +656,7 @@ function renderDailyTasks(){
   document.getElementById('dd-pct-frac').innerHTML = '<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
 
   var html = '';
-  if(tasks.length===0) html = '<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 할 일을 추가해보세요</div>';
+  if(tasks.length===0) html = '<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 업무를 추가해보세요</div>';
   tasks.forEach(function(t){
     html += '<div class="item-row">'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDailyTask(\''+ds+'\','+t.id+')"></div>'
@@ -726,7 +708,7 @@ function renderMonthlyTasks(){
   document.getElementById('md-pct-frac').innerHTML = '<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
 
   var html = '';
-  if(tasks.length===0) html = '<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 달의 월간 업무를 추가해보세요</div>';
+  if(tasks.length===0) html = '<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 달의 업무를 추가해보세요</div>';
   tasks.forEach(function(t){
     html += '<div class="item-row">'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthlyTask('+t.id+')"></div>'
@@ -790,7 +772,6 @@ function initDatePicker(){
 renderCal();
 renderYearGoals();
 renderQGoals();
-renderMonthGoals();
 initDatePicker();
 renderDailyTasks();
 renderMonthlyTasks();
