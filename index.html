@@ -199,15 +199,28 @@
       </div>
     </div>
 
-    <div class="grid2">
-      <div class="card">
-        <div class="card-title">이번 분기 목표</div>
-        <div id="dash-q-goals"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">오늘 할 일 요약</div>
-        <div id="dash-today-summary"></div>
-      </div>
+    <!-- 오늘 할 일 요약 -->
+    <div class="card">
+      <div class="card-title">오늘 할 일 요약</div>
+      <div id="dash-today-summary"></div>
+    </div>
+
+    <!-- 이번 달 목표 -->
+    <div class="card">
+      <div class="card-title">이번 달 목표</div>
+      <div id="dash-month-goals"></div>
+    </div>
+
+    <!-- 이번 분기 목표 -->
+    <div class="card">
+      <div class="card-title">이번 분기 목표</div>
+      <div id="dash-q-goals"></div>
+    </div>
+
+    <!-- 연간 목표 진행률 (전체 완료율만) -->
+    <div class="card">
+      <div class="card-title">연간 목표 전체 완료율</div>
+      <div id="dash-year-prog"></div>
     </div>
   </div>
 
@@ -408,7 +421,27 @@ function renderDashboard(){
   }
   document.getElementById('dash-q-goals').innerHTML = qHtml;
 
-  // 6) 오늘 할 일 요약 — todayStr() 기준으로 항상 새로 읽기
+  // 6-1) 이번 달 목표 리스트
+  var curM = TODAY.getMonth();
+  var mGoals = state.monthGoals[curM]||[];
+  var mGDone = mGoals.filter(function(g){return g.done;}).length;
+  var mGHtml = '<div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">'
+    +'<span style="font-size:13px;font-weight:500;color:var(--text);">'+(curM+1)+'월</span>'
+    +'<span style="font-size:12px;color:var(--text2);">'+mGDone+' / '+mGoals.length+' 완료</span>'
+    +'</div>';
+  if(mGoals.length===0){
+    mGHtml += '<div style="color:var(--text3);font-size:13px;">월별 목표를 추가해보세요</div>';
+  } else {
+    mGoals.forEach(function(g,gi){
+      mGHtml += '<div class="item-row">'
+        +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleMGoalDash('+curM+','+gi+')"></div>'
+        +'<span class="item-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'</div>';
+    });
+  }
+  document.getElementById('dash-month-goals').innerHTML = mGHtml;
+
+  // 6-2) 오늘 할 일 요약 — todayStr() 기준으로 항상 새로 읽기
   var tTasks = state.dailyTasks[todayStr()]||[];
   var summaryHtml = '';
   if(tTasks.length===0){
@@ -432,6 +465,26 @@ function renderDashboard(){
     }
   }
   document.getElementById('dash-today-summary').innerHTML = summaryHtml;
+
+  // 7) 연간 목표 전체 완료율 (단일 바)
+  var ypEl = document.getElementById('dash-year-prog');
+  var total = state.yearGoals.length;
+  var done100 = state.yearGoals.filter(function(g){ return g.prog === 100; }).length;
+  var avgProg = total === 0 ? 0 : Math.round(
+    state.yearGoals.reduce(function(sum,g){ return sum + g.prog; }, 0) / total
+  );
+  if(total === 0){
+    ypEl.innerHTML = '<div style="color:var(--text3);font-size:13px;">연간 목표를 추가해보세요</div>';
+  } else {
+    ypEl.innerHTML = ''
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+      +'<span style="font-size:13px;color:var(--text2);">완료 <strong style="color:var(--text);">'+done100+'</strong> / 전체 <strong style="color:var(--text);">'+total+'</strong>개</span>'
+      +'<span style="font-size:18px;font-weight:600;color:var(--purple);">'+avgProg+'%</span>'
+      +'</div>'
+      +'<div class="prog-bar" style="height:10px;border-radius:5px;">'
+      +'<div class="prog-fill fill-purple" style="width:'+avgProg+'%;border-radius:5px;"></div>'
+      +'</div>';
+  }
 }
 
 /* dashboard에서 직접 체크 가능하도록 */
@@ -448,6 +501,13 @@ function toggleQGoalDash(qi, gi){
   state.qGoals[qi][gi].done = !state.qGoals[qi][gi].done;
   renderDashboard(); saveState();
   if(document.getElementById('goals').classList.contains('active')) renderQGoals();
+}
+
+function toggleMGoalDash(mi, gi){
+  if(!state.monthGoals[mi]) return;
+  state.monthGoals[mi][gi].done = !state.monthGoals[mi][gi].done;
+  renderDashboard(); saveState();
+  if(document.getElementById('goals').classList.contains('active')) renderMonthGoals();
 }
 
 /* ============================================================
