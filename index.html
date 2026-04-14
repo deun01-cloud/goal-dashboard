@@ -275,22 +275,26 @@ async function nFetch(path, method, body) {
 async function queryDB(dbId, filter) {
   var body = { page_size: 100 };
   if (filter) body.filter = filter;
-  var data = await nFetch('/databases/' + dbId + '/query', 'POST', body);
+  var cleanId = dbId.replace(/-/g, '');
+  var data = await nFetch('/databases/' + cleanId + '/query', 'POST', body);
   return data.results || [];
 }
 
 async function createPage(dbId, props) {
-  var body = { parent: { database_id: dbId }, properties: props };
+  var cleanId = dbId.replace(/-/g, '');
+  var body = { parent: { database_id: cleanId }, properties: props };
   var data = await nFetch('/pages', 'POST', body);
   return data.id;
 }
 
 async function updatePage(pageId, props) {
-  await nFetch('/pages/' + pageId, 'PATCH', { properties: props });
+  var cleanId = pageId.replace(/-/g, '');
+  await nFetch('/pages/' + cleanId, 'PATCH', { properties: props });
 }
 
 async function deletePage(pageId) {
-  await nFetch('/pages/' + pageId, 'PATCH', { archived: true });
+  var cleanId = pageId.replace(/-/g, '');
+  await nFetch('/pages/' + cleanId, 'PATCH', { archived: true });
 }
 
 /* ============================================================
