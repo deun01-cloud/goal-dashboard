@@ -217,8 +217,42 @@
         </div>
       </div>
     </div>
-    <div class="card"><div class="card-title">이번 분기 목표</div><div id="dash-q"></div></div>
-    <div class="card"><div class="card-title">연간 목표 전체 완료율</div><div id="dash-year-prog"></div></div>
+    <div class="card">
+      <div class="card-title">이번 분기 목표</div>
+      <div id="dash-q"></div>
+      <!-- 분기 진척률 -->
+      <div id="ds-q-prog-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:11px;color:var(--text2);">분기 목표 진척률</span>
+          <span id="ds-q-pct-label" style="font-size:14px;font-weight:700;color:var(--blue);">0%</span>
+        </div>
+        <div class="prog-bar" style="height:8px;border-radius:4px;">
+          <div class="prog-fill fill-blue" id="ds-q-prog-fill" style="width:0%;border-radius:4px;transition:width .4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;">
+          <span id="ds-q-done-label" style="font-size:11px;color:var(--text2);">완료 0개</span>
+          <span id="ds-q-left-label" style="font-size:11px;color:var(--text3);">남은 0개</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">연간 목표 전체 완료율</div>
+      <div id="dash-year-prog"></div>
+      <!-- 연간 진척률 바 -->
+      <div id="ds-year-prog-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:11px;color:var(--text2);">연간 목표 진척률</span>
+          <span id="ds-year-pct-label" style="font-size:14px;font-weight:700;color:var(--teal);">0%</span>
+        </div>
+        <div class="prog-bar" style="height:8px;border-radius:4px;">
+          <div class="prog-fill fill-teal" id="ds-year-prog-fill" style="width:0%;border-radius:4px;transition:width .4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;">
+          <span id="ds-year-done-label" style="font-size:11px;color:var(--text2);">완료 0개</span>
+          <span id="ds-year-left-label" style="font-size:11px;color:var(--text3);">남은 0개</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- GOALS -->
@@ -475,6 +509,8 @@ async function loadAll(){
 ============================================================ */
 function checkCarryOver(){
   if(selDailyDate!==todayStr())return;
+  /* 오늘 이미 처리했으면 안 보여줌 */
+  if(localStorage.getItem('carry_dismissed_'+todayStr()))return;
   var prev=prevWorkday(todayStr());
   var pending=(cache.daily[prev]||[]).filter(function(t){return !t.done&&!t.isMeeting;});
   if(pending.length>0){
@@ -485,6 +521,7 @@ function checkCarryOver(){
 }
 async function applyCarryOver(){
   document.getElementById('carry-notice').style.display='none';
+  localStorage.setItem('carry_dismissed_'+todayStr(),'1');
   for(var i=0;i<carryPending.length;i++){
     var t=carryPending[i];
     var exists=(cache.daily[selDailyDate]||[]).some(function(x){return x.text===t.text;});
@@ -492,7 +529,11 @@ async function applyCarryOver(){
   }
   carryPending=[];renderDailyTasks();renderCal();renderDashboard();
 }
-function dismissCarryOver(){document.getElementById('carry-notice').style.display='none';carryPending=[];}
+function dismissCarryOver(){
+  document.getElementById('carry-notice').style.display='none';
+  localStorage.setItem('carry_dismissed_'+todayStr(),'1');
+  carryPending=[];
+}
 
 /* ============================================================
    RENDER ALL
@@ -604,16 +645,42 @@ function renderDashboard(){
 
   var QCLS={Q1:'q1',Q2:'q2',Q3:'q3',Q4:'q4'};
   var qDone=qg.filter(function(g){return g.done;}).length;
-  var qHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span class="q-badge '+(QCLS[curQL]||'q1')+'">'+curQL+'</span><span style="font-size:12px;color:var(--text2);">'+qDone+'/'+qg.length+' 완료</span></div>';
-  qHtml+=qg.length===0?'<div style="color:var(--text3);font-size:13px;">분기 목표를 추가해보세요</div>'
+  var qTotal=qg.length;
+  var qPct=qTotal===0?0:Math.round(qDone/qTotal*100);
+  var qHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span class="q-badge '+(QCLS[curQL]||'q1')+'">'+curQL+'</span><span style="font-size:12px;color:var(--text2);">'+qDone+'/'+qTotal+' 완료</span></div>';
+  qHtml+=qTotal===0?'<div style="color:var(--text3);font-size:13px;">분기 목표를 추가해보세요</div>'
     :qg.map(function(g){var idx=cache.goals.indexOf(g);return'<div class="item-row"><div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal('+idx+')"></div><span class="item-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span></div>';}).join('');
   document.getElementById('dash-q').innerHTML=qHtml;
+  /* 분기 진척률 바 */
+  var qWrap=document.getElementById('ds-q-prog-wrap');
+  if(qWrap)qWrap.style.display=qTotal>0?'block':'none';
+  var qFill=document.getElementById('ds-q-prog-fill');
+  var qPctEl=document.getElementById('ds-q-pct-label');
+  var qDoneEl=document.getElementById('ds-q-done-label');
+  var qLeftEl=document.getElementById('ds-q-left-label');
+  if(qFill)qFill.style.width=qPct+'%';
+  if(qPctEl)qPctEl.textContent=qPct+'%';
+  if(qDoneEl)qDoneEl.textContent='완료 '+qDone+'개';
+  if(qLeftEl)qLeftEl.textContent='남은 '+(qTotal-qDone)+'개';
 
   var avg=yr.length===0?0:Math.round(yr.reduce(function(s,g){return s+g.prog;},0)/yr.length);
+  var yrDone100=yr.filter(function(g){return g.prog===100;}).length;
   document.getElementById('dash-year-prog').innerHTML=yr.length===0
     ?'<div style="color:var(--text3);font-size:13px;">연간 목표를 추가해보세요</div>'
-    :'<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text2);">완료 <strong style="color:var(--text);">'+yr.filter(function(g){return g.prog===100;}).length+'</strong> / 전체 <strong style="color:var(--text);">'+yr.length+'</strong>개</span><span style="font-size:18px;font-weight:600;color:var(--purple);">'+avg+'%</span></div>'
+    :'<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text2);">완료 <strong style="color:var(--text);">'+yrDone100+'</strong> / 전체 <strong style="color:var(--text);">'+yr.length+'</strong>개</span><span style="font-size:18px;font-weight:600;color:var(--purple);">'+avg+'%</span></div>'
     +'<div class="prog-bar" style="height:10px;border-radius:5px;"><div class="prog-fill fill-purple" style="width:'+avg+'%;border-radius:5px;"></div></div>';
+  /* 연간 진척률 바 */
+  var yWrap=document.getElementById('ds-year-prog-wrap');
+  if(yWrap)yWrap.style.display=yr.length>0?'block':'none';
+  var yFill=document.getElementById('ds-year-prog-fill');
+  var yPctEl=document.getElementById('ds-year-pct-label');
+  var yDoneEl=document.getElementById('ds-year-done-label');
+  var yLeftEl=document.getElementById('ds-year-left-label');
+  var yPct=yr.length===0?0:Math.round(yrDone100/yr.length*100);
+  if(yFill)yFill.style.width=yPct+'%';
+  if(yPctEl)yPctEl.textContent=yPct+'%';
+  if(yDoneEl)yDoneEl.textContent='완료 '+yrDone100+'개';
+  if(yLeftEl)yLeftEl.textContent='남은 '+(yr.length-yrDone100)+'개';
 }
 function dashToggleDaily(i){var s=td_sorted();var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
 function dashToggleWeekly(i){var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';var s=(cache.weekly[wKey]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleWeekly(t.id,wKey);}
@@ -668,14 +735,31 @@ function toggleGoal(idx){var g=cache.goals[idx];if(!g)return;g.done=!g.done;rend
 function updProg(idx,v){var g=cache.goals[idx];if(!g)return;g.prog=parseInt(v);renderGoals();withSync(function(){return updatePage(g.id,{'진행률':pNumber(g.prog)});});}
 function delGoal(idx){var g=cache.goals[idx];if(!g)return;cache.goals.splice(idx,1);renderGoals();withSync(function(){return deletePage(g.id);});}
 
-/* ============================================================
-   DAILY
-============================================================ */
+/* 수동 순서 유지용 배열 (드래그 후 순서 고정) */
+var _dailyOrder = {}; /* key: dateStr → [id, id, ...] */
+
+function getDailyOrdered(ds){
+  var tasks = cache.daily[ds] || [];
+  var order = _dailyOrder[ds];
+  if(!order || order.length !== tasks.length){
+    /* 순서 없으면 기본 priSort */
+    var sorted = tasks.slice().sort(priSort);
+    _dailyOrder[ds] = sorted.map(function(t){return t.id;});
+    return sorted;
+  }
+  /* 저장된 순서대로 정렬 */
+  var idMap = {};
+  tasks.forEach(function(t){idMap[t.id]=t;});
+  var ordered = order.map(function(id){return idMap[id];}).filter(Boolean);
+  /* 순서에 없는 새 항목은 뒤에 붙임 */
+  tasks.forEach(function(t){if(ordered.indexOf(t)<0)ordered.push(t);});
+  return ordered;
+}
 function renderDailyTasks(){
   var dp=document.getElementById('daily-date-picker');if(dp&&dp.value)selDailyDate=dp.value;
   var d=new Date(selDailyDate+'T00:00:00'),DAYS=['일','월','화','수','목','금','토'];
   document.getElementById('daily-date-label').textContent=d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+DAYS[d.getDay()]+'요일';
-  var tasks=(cache.daily[selDailyDate]||[]).slice().sort(priSort);
+  var tasks=getDailyOrdered(selDailyDate);
   var done=tasks.filter(function(t){return t.done;}).length;
   document.getElementById('dd-total').innerHTML='<span class="done-n">'+tasks.length+'</span>';
   setFrac('dd-done-frac',done,tasks.length);
@@ -697,16 +781,48 @@ function renderDailyTasks(){
   });
   document.getElementById('daily-list').innerHTML=html;
 }
-function _dropDaily(e,i){e.preventDefault();e.currentTarget.classList.remove('drag-over');if(_dDrag===null||_dDrag===i)return;var arr=(cache.daily[selDailyDate]||[]).slice().sort(priSort);var m=arr.splice(_dDrag,1)[0];arr.splice(i,0,m);cache.daily[selDailyDate]=arr;_dDrag=null;renderDailyTasks();}
-function cycleDailyPri(i){var tasks=(cache.daily[selDailyDate]||[]).slice().sort(priSort);var t=tasks[i];if(!t)return;var cycle=['높음','보통','낮음'],next=cycle[(cycle.indexOf(t.pri)+1)%3];var orig=(cache.daily[selDailyDate]||[]).find(function(x){return x.id===t.id;});if(orig){orig.pri=next;renderDailyTasks();renderDashboard();withSync(function(){return updatePage(orig.id,{'우선순위':pSelect(next)});});}}
-function toggleDailyByIdx(i){var s=(cache.daily[selDailyDate]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleDaily(t.id,selDailyDate);}
-function delDailyByIdx(i){var s=(cache.daily[selDailyDate]||[]).slice().sort(priSort);var t=s[i];if(!t)return;cache.daily[selDailyDate]=(cache.daily[selDailyDate]||[]).filter(function(x){return x.id!==t.id;});renderDailyTasks();renderCal();renderDashboard();withSync(function(){return deletePage(t.id);});}
+function _dropDaily(e,i){
+  e.preventDefault();e.currentTarget.classList.remove('drag-over');
+  if(_dDrag===null||_dDrag===i)return;
+  var arr=getDailyOrdered(selDailyDate);
+  var m=arr.splice(_dDrag,1)[0];
+  arr.splice(i,0,m);
+  /* 수동 순서 저장 */
+  _dailyOrder[selDailyDate]=arr.map(function(t){return t.id;});
+  cache.daily[selDailyDate]=arr;
+  _dDrag=null;
+  renderDailyTasks();
+}
+function cycleDailyPri(i){
+  var tasks=getDailyOrdered(selDailyDate);var t=tasks[i];if(!t)return;
+  var cycle=['높음','보통','낮음'],next=cycle[(cycle.indexOf(t.pri)+1)%3];
+  var orig=(cache.daily[selDailyDate]||[]).find(function(x){return x.id===t.id;});
+  if(orig){orig.pri=next;renderDailyTasks();renderDashboard();withSync(function(){return updatePage(orig.id,{'우선순위':pSelect(next)});});}
+}
+function toggleDailyByIdx(i){var t=getDailyOrdered(selDailyDate)[i];if(t)doToggleDaily(t.id,selDailyDate);}
+function delDailyByIdx(i){
+  var t=getDailyOrdered(selDailyDate)[i];if(!t)return;
+  cache.daily[selDailyDate]=(cache.daily[selDailyDate]||[]).filter(function(x){return x.id!==t.id;});
+  if(_dailyOrder[selDailyDate])_dailyOrder[selDailyDate]=_dailyOrder[selDailyDate].filter(function(id){return id!==t.id;});
+  renderDailyTasks();renderCal();renderDashboard();
+  withSync(function(){return deletePage(t.id);});
+}
 function doToggleDaily(id,ds){var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderDailyTasks();renderCal();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
 async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried){
   var ds=selDailyDate;
   var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried};
   if(!cache.daily[ds])cache.daily[ds]=[];cache.daily[ds].push(opt);
-  var props={'업무':pTitle(text),'날짜':pDate(ds),'태그':pSelect(isMtg?'미팅':tag),'우선순위':pSelect(pri),'완료':pCheck(false)};
+  var props={'업무':pTitle(text),'태그':pSelect(isMtg?'미팅':tag),'우선순위':pSelect(pri),'완료':pCheck(false)};
+  /* 미팅이고 시간이 있으면 datetime으로 저장 → 노션 캘린더 앱에서 인식 */
+  if(isMtg&&time){
+    var dtStart=ds+'T'+time+':00';
+    /* 1시간 후를 종료 시간으로 */
+    var dtEndDate=new Date(dtStart);dtEndDate.setHours(dtEndDate.getHours()+1);
+    var dtEnd=ds+'T'+pad(dtEndDate.getHours())+':'+pad(dtEndDate.getMinutes())+':00';
+    props['날짜']={date:{start:dtStart,end:dtEnd}};
+  } else {
+    props['날짜']=pDate(ds);
+  }
   if(time)props['메모']=pText(time);
   await withSync(async function(){var id=await createPage(DB.daily,props);opt.id=id;});
 }
@@ -882,7 +998,7 @@ function _startInlineEdit(spanEl, currentText, onSave){
   });
 }
 function startEditDaily(i,spanEl){
-  var tasks=(cache.daily[selDailyDate]||[]).slice().sort(priSort);
+  var tasks=getDailyOrdered(selDailyDate);
   var t=tasks[i];if(!t)return;
   _startInlineEdit(spanEl,t.text,function(newText){
     var orig=(cache.daily[selDailyDate]||[]).find(function(x){return x.id===t.id;});
