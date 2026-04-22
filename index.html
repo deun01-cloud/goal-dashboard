@@ -454,7 +454,19 @@ function rTitle(p,k){var t=p[k];if(!t||!t.title)return'';return(t.title[0]&&t.ti
 function rCheck(p,k){return!!(p[k]&&p[k].checkbox);}
 function rSelect(p,k){return(p[k]&&p[k].select&&p[k].select.name)||'';}
 function rNumber(p,k){return(p[k]&&p[k].number)||0;}
-function rDate(p,k){return(p[k]&&p[k].date&&p[k].date.start)||'';}
+function rDate(p,k){
+  var v=(p[k]&&p[k].date&&p[k].date.start)||'';
+  /* datetime (2026-04-20T17:00:00) 이면 날짜 부분만 추출 */
+  return v?v.split('T')[0]:'';
+}
+function rDateTime(p,k){
+  /* 미팅 시간 표시용 — 시간 부분만 추출 */
+  var v=(p[k]&&p[k].date&&p[k].date.start)||'';
+  if(v&&v.indexOf('T')>=0){
+    var t=v.split('T')[1];return t?t.slice(0,5):'';
+  }
+  return '';
+}
 function rText(p,k){var t=p[k];if(!t||!t.rich_text)return'';return(t.rich_text[0]&&t.rich_text[0].plain_text)||'';}
 
 /* ============================================================
@@ -483,7 +495,9 @@ async function loadAll(){
       var pr=p.properties,ds=rDate(pr,'날짜');if(!ds)return;
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:rText(pr,'메모')||''});
+      /* 미팅 시간: datetime에서 추출 우선, 없으면 메모에서 */
+      var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime});
     });
     cache.weekly={};
     wR.forEach(function(p){
