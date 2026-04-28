@@ -240,6 +240,16 @@ body{
 .month-tab{padding:6px 14px;border-radius:16px;font-size:12px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;cursor:pointer;flex-shrink:0;}
 .month-tab.active{background:var(--purple);color:#fff;border-color:var(--purple);}
 
+/* Today's full month calendar */
+.today-month{margin-bottom:14px;}
+.today-month-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.today-month-h .tm-title{font-size:14px;font-weight:600;color:var(--text);}
+.today-month-h .tm-nav{display:flex;gap:4px;}
+.today-month-h .tm-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.today-month-h .tm-btn:active{background:var(--bg2);}
+.today-month-h .tm-today{font-size:11px;padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;cursor:pointer;}
+.today-month-h .tm-today:active{background:var(--bg2);}
+
 /* Switch link */
 .pc-link{display:block;text-align:center;font-size:11px;color:var(--text3);padding:16px 0;text-decoration:none;}
 .pc-link:active{color:var(--text2);}
@@ -255,49 +265,27 @@ body{
       <div class="head">
         <div class="head-l">
           <div class="head-date" id="today-date-label"></div>
-          <div class="head-title">오늘</div>
+          <div class="head-title" id="today-title">오늘</div>
         </div>
         <div class="head-r">
           <span class="sync-mini"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">연결 중</span></span>
         </div>
       </div>
 
-      <div class="stat-bg">
-        <div class="stat-row">
-          <span class="stat-label">오늘 진척률</span>
-          <span class="stat-num" id="today-frac"><span>0</span><span class="sep">/</span><span class="total">0</span></span>
+      <!-- 풀 월간 캘린더 -->
+      <div class="today-month">
+        <div class="today-month-h">
+          <span class="tm-title" id="tm-title">—</span>
+          <div class="tm-nav">
+            <button class="tm-today" onclick="todayMoToday()">오늘</button>
+            <button class="tm-btn" onclick="todayMoMove(-1)">‹</button>
+            <button class="tm-btn" onclick="todayMoMove(1)">›</button>
+          </div>
         </div>
-        <div class="bar"><div class="bar-fill" id="today-bar" style="width:0%"></div></div>
-      </div>
-
-      <div id="today-meetings"></div>
-      <div class="section-h" id="today-tasks-h" style="display:none;"><span>할 일</span></div>
-      <div id="today-tasks"></div>
-    </div>
-
-    <!-- CALENDAR PAGE -->
-    <div id="page-cal" class="page">
-      <div class="head">
-        <div class="head-l">
-          <div class="head-date" id="cal-date-label"></div>
-          <div class="head-title" id="cal-title">캘린더</div>
-        </div>
-        <div class="head-r">
-          <button class="icon-btn" onclick="calMove(-1)">‹</button>
-          <button class="icon-btn" onclick="calMove(1)">›</button>
-        </div>
-      </div>
-
-      <div class="cal-toggle">
-        <button class="cal-toggle-btn active" id="cal-tog-m" onclick="setCalMode('month')">월간</button>
-        <button class="cal-toggle-btn" id="cal-tog-w" onclick="setCalMode('week')">주간</button>
-      </div>
-
-      <div id="cal-month-view">
         <div class="dow">
           <span class="s">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="t">토</span>
         </div>
-        <div class="month" id="month-grid"></div>
+        <div class="month" id="today-month-grid"></div>
         <div class="legend">
           <span class="legend-i"><span class="evdot mtg"></span>미팅</span>
           <span class="legend-i"><span class="evdot task"></span>업무</span>
@@ -307,11 +295,21 @@ body{
         </div>
       </div>
 
-      <div id="cal-week-view" style="display:none;">
-        <div class="week-strip" id="week-strip"></div>
+      <div class="stat-bg">
+        <div class="stat-row">
+          <span class="stat-label" id="today-stat-label">오늘 진척률</span>
+          <span class="stat-num" id="today-frac"><span>0</span><span class="sep">/</span><span class="total">0</span></span>
+        </div>
+        <div class="bar"><div class="bar-fill" id="today-bar" style="width:0%"></div></div>
       </div>
 
-      <div class="day-detail" id="day-detail"></div>
+      <div id="today-meetings"></div>
+      <div class="section-h" id="today-tasks-h" style="display:none;"><span id="today-tasks-h-label">할 일</span></div>
+      <div id="today-tasks"></div>
+
+      <!-- 주간 업무 -->
+      <div class="section-h" id="today-weekly-h" style="display:none;"><span id="today-weekly-label">이번 주 업무</span></div>
+      <div id="today-weekly"></div>
     </div>
 
     <!-- GOALS PAGE -->
@@ -383,9 +381,6 @@ body{
   <div class="tabbar">
     <button class="tab active" data-page="today" onclick="goPage('today')">
       <span class="tab-icon">●</span><span>오늘</span>
-    </button>
-    <button class="tab" data-page="cal" onclick="goPage('cal')">
-      <span class="tab-icon">▦</span><span>캘린더</span>
     </button>
     <button class="tab" data-page="goals" onclick="goPage('goals')">
       <span class="tab-icon">◆</span><span>목표</span>
@@ -536,10 +531,6 @@ var HOLIDAYS = {
    HELPERS
    ============================================================ */
 var TODAY = new Date();
-var calY = TODAY.getFullYear(), calM = TODAY.getMonth();
-var selDate = fmt(TODAY);
-var calMode = 'month';
-var weekAnchor = new Date(TODAY);
 var MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 var DAYS = ['일','월','화','수','목','금','토'];
 var addType = 'task', addTag = '업무', addPri = '보통', addPeriod = 'daily', addDiv = '연간';
@@ -651,16 +642,28 @@ async function loadAll(){
 /* ============================================================
    RENDER ALL
    ============================================================ */
-function renderAll(){renderToday();renderCal();renderGoals();}
+function renderAll(){renderToday();renderGoals();}
 
 /* ============================================================
-   TODAY
+   TODAY — 풀 월간 캘린더 + 일간 + 주간
    ============================================================ */
+var todaySelDate = fmt(TODAY);
+var todayCalY = TODAY.getFullYear();
+var todayCalM = TODAY.getMonth();
+
 function renderToday(){
-  var today=todayStr();
-  var d=new Date(today+'T00:00:00');
+  var disp = todaySelDate || fmt(TODAY);
+  var d = new Date(disp+'T00:00:00');
+  var isToday = disp === fmt(TODAY);
   document.getElementById('today-date-label').textContent=d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+DAYS[d.getDay()]+'요일';
-  var tasks=(cache.daily[today]||[]).slice().sort(priSort);
+  document.getElementById('today-title').textContent = isToday ? '오늘' : (d.getMonth()+1)+'월 '+d.getDate()+'일';
+  document.getElementById('today-stat-label').textContent = isToday ? '오늘 진척률' : '진척률';
+
+  // 풀 월간 캘린더
+  renderTodayMonthGrid();
+
+  // 일간 업무 (선택된 날짜 기준)
+  var tasks=(cache.daily[disp]||[]).slice().sort(priSort);
   var done=tasks.filter(function(t){return t.done;}).length;
   var pct=tasks.length?Math.round(done/tasks.length*100):0;
   document.getElementById('today-frac').innerHTML='<span>'+done+'</span><span class="sep">/</span><span class="total">'+tasks.length+'</span>';
@@ -675,69 +678,44 @@ function renderToday(){
     meetings.forEach(function(t){
       mh+='<div class="task meeting">'
         +(t.meetingTime?'<span class="mtg-time">'+t.meetingTime+'</span>':'')
-        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+today+'\')"></div>'
+        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
         +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
-        +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+today+'\')">×</button></div>';
+        +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
     });
   }
   document.getElementById('today-meetings').innerHTML=mh;
 
   document.getElementById('today-tasks-h').style.display=others.length>0?'flex':'none';
+  document.getElementById('today-tasks-h-label').textContent = isToday ? '오늘 할 일' : (d.getMonth()+1)+'/'+d.getDate()+' 할 일';
   if(others.length===0){
-    document.getElementById('today-tasks').innerHTML=meetings.length===0?'<div class="empty">오늘 할 일이 없어요<br>+ 버튼으로 추가해보세요</div>':'';
+    document.getElementById('today-tasks').innerHTML=meetings.length===0?'<div class="empty">'+(isToday?'오늘 할 일이 없어요<br>+ 버튼으로 추가해보세요':'이 날 할 일이 없어요')+'</div>':'';
   } else {
     document.getElementById('today-tasks').innerHTML=others.map(function(t){
       return '<div class="task">'
-        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+today+'\')"></div>'
+        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
         +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
         +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
-        +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+today+'\')">×</button></div>';
+        +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
     }).join('');
   }
+
+  // 주간 업무 (선택된 날짜가 속한 주)
+  renderTodayWeeklyTasks(disp);
 }
 
-function toggleDaily(id,ds){
-  haptic();
-  var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;
-  t.done=!t.done;
-  renderToday();renderCal();
-  withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
-}
-function delDaily(id,ds){
-  if(!confirm('이 업무를 삭제할까요?'))return;
-  haptic();
-  cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x.id!==id;});
-  renderToday();renderCal();
-  withSync(function(){return deletePage(id);});
-}
-
-/* ============================================================
-   CALENDAR
-   ============================================================ */
-function setCalMode(m){
-  calMode=m;
-  document.getElementById('cal-tog-m').classList.toggle('active',m==='month');
-  document.getElementById('cal-tog-w').classList.toggle('active',m==='week');
-  document.getElementById('cal-month-view').style.display=m==='month'?'block':'none';
-  document.getElementById('cal-week-view').style.display=m==='week'?'block':'none';
-  renderCal();
-}
-
-function renderCal(){
-  if(calMode==='month')renderMonthCal();else renderWeekCal();
-  renderDayDetail();
-}
-
-function renderMonthCal(){
-  document.getElementById('cal-date-label').textContent=calY+'년';
-  document.getElementById('cal-title').textContent=(calM+1)+'월';
-  var first=new Date(calY,calM,1).getDay(),dim=new Date(calY,calM+1,0).getDate(),prevEnd=new Date(calY,calM,0).getDate();
+// 오늘 페이지 풀 월간 캘린더
+function renderTodayMonthGrid(){
+  document.getElementById('tm-title').textContent = todayCalY+'년 '+(todayCalM+1)+'월';
+  var first=new Date(todayCalY,todayCalM,1).getDay();
+  var dim=new Date(todayCalY,todayCalM+1,0).getDate();
+  var prevEnd=new Date(todayCalY,todayCalM,0).getDate();
   var cells=[];
-  for(var i=0;i<first;i++)cells.push({d:prevEnd-first+1+i,cur:false,m:calM-1,y:calY});
-  for(var i=1;i<=dim;i++)cells.push({d:i,cur:true,m:calM,y:calY});
-  while(cells.length<42)cells.push({d:cells.length-first-dim+1,cur:false,m:calM+1,y:calY});
+  for(var i=0;i<first;i++)cells.push({d:prevEnd-first+1+i,cur:false,m:todayCalM-1,y:todayCalY});
+  for(var i=1;i<=dim;i++)cells.push({d:i,cur:true,m:todayCalM,y:todayCalY});
+  while(cells.length<42)cells.push({d:cells.length-first-dim+1,cur:false,m:todayCalM+1,y:todayCalY});
 
+  var todayKey=fmt(TODAY);
   var html='';
   cells.forEach(function(c,idx){
     var dow=idx%7;
@@ -745,8 +723,8 @@ function renderMonthCal(){
     if(realM<0){realM=11;realY--;}
     if(realM>11){realM=0;realY++;}
     var ds=realY+'-'+pad(realM+1)+'-'+pad(c.d);
-    var isToday=ds===todayStr();
-    var isSel=ds===selDate;
+    var isToday=ds===todayKey;
+    var isSel=ds===todaySelDate;
     var holi=HOLIDAYS[ds];
     var evs=cache.daily[ds]||[];
     var tripsDay=trips.filter(function(tr){return tr.start<=ds&&ds<=tr.end;});
@@ -761,87 +739,101 @@ function renderMonthCal(){
     if(hasTask)dots+='<span class="evdot task"></span>';
     if(hasTrip)dots+='<span class="evdot trip"></span>';
     if(hasVac)dots+='<span class="evdot vacation"></span>';
-    html+='<button class="'+cls+'" onclick="selectDate(\''+ds+'\')"><span class="num">'+c.d+'</span><div class="evs">'+dots+'</div></button>';
+    html+='<button class="'+cls+'" onclick="todayMoSelect(\''+ds+'\')"><span class="num">'+c.d+'</span><div class="evs">'+dots+'</div></button>';
   });
-  document.getElementById('month-grid').innerHTML=html;
+  document.getElementById('today-month-grid').innerHTML=html;
 }
 
-function renderWeekCal(){
-  var anchor=new Date(weekAnchor);
-  var dow=anchor.getDay();
-  anchor.setDate(anchor.getDate()-dow);
-  var startDate=new Date(anchor),endDate=new Date(anchor);
-  endDate.setDate(endDate.getDate()+6);
-  document.getElementById('cal-date-label').textContent=fmt(startDate)+' — '+fmt(endDate);
-  document.getElementById('cal-title').textContent='이번 주';
-
-  var html='';
-  for(var i=0;i<7;i++){
-    var d=new Date(anchor);d.setDate(anchor.getDate()+i);
-    var ds=fmt(d);
-    var isToday=ds===todayStr(),isSel=ds===selDate;
-    var cls='wd'+(isToday?' today':'')+(isSel&&!isToday?' sel':'');
-    html+='<button class="'+cls+'" onclick="selectDate(\''+ds+'\')"><span class="dn">'+DAYS[d.getDay()]+'</span><span class="nm">'+d.getDate()+'</span></button>';
-  }
-  document.getElementById('week-strip').innerHTML=html;
-}
-
-function renderDayDetail(){
-  var d=new Date(selDate+'T00:00:00');
-  var holi=HOLIDAYS[selDate];
-  var tasks=(cache.daily[selDate]||[]).slice().sort(priSort);
-  var tripsDay=trips.filter(function(tr){return tr.start<=selDate&&selDate<=tr.end;});
-  var totalCount=tasks.length+tripsDay.length+(holi?1:0);
-
-  var html='<div class="day-detail-h"><span>'+(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+DAYS[d.getDay()]+')</span><span class="dd-count">'+totalCount+'건</span></div>';
-
-  if(holi)html+='<div class="task" style="background:#FFF8F0;border-radius:8px;padding:8px;border-bottom:none;margin-bottom:6px;"><span style="color:#FF6B35;font-size:13px;">🔴 '+escHtml(holi)+'</span></div>';
-
-  tripsDay.forEach(function(tr){
-    var bcls=tr.type==='trip'?'badge-trip':'badge-vacation';
-    var ico=tr.type==='trip'?'✈':'☼';
-    html+='<div class="task" style="border-bottom:none;padding:6px 0;"><span class="trip-badge '+bcls+'">'+ico+' '+(tr.type==='trip'?'출장':'휴가')+'</span><span class="task-text">'+escHtml(tr.name)+'</span></div>';
-  });
-
-  if(tasks.length===0&&tripsDay.length===0&&!holi){
-    html+='<div class="empty" style="padding:16px 0;">이 날 일정이 없어요</div>';
-  } else {
-    tasks.forEach(function(t){
-      var isMtg=t.isMeeting||t.tag==='미팅';
-      html+='<div class="task'+(isMtg?' meeting':'')+'" style="background:'+(isMtg?'var(--meeting-light)':'transparent')+';">'
-        +(isMtg&&t.meetingTime?'<span class="mtg-time">'+t.meetingTime+'</span>':'')
-        +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+selDate+'\')"></div>'
-        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
-        +(!isMtg?'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>':'')
-        +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+selDate+'\')">×</button></div>';
-    });
-  }
-  document.getElementById('day-detail').innerHTML=html;
-}
-
-function selectDate(ds){
+function todayMoSelect(ds){
   haptic();
-  selDate=ds;
-  // 선택한 날짜로 이동 (다른 달이면 캘린더도 이동)
+  todaySelDate=ds;
   var d=new Date(ds+'T00:00:00');
-  if(d.getFullYear()!==calY||d.getMonth()!==calM){
-    calY=d.getFullYear();calM=d.getMonth();
+  if(d.getFullYear()!==todayCalY||d.getMonth()!==todayCalM){
+    todayCalY=d.getFullYear();
+    todayCalM=d.getMonth();
   }
-  weekAnchor=d;
-  renderCal();
+  renderToday();
 }
 
-function calMove(delta){
+function todayMoMove(delta){
   haptic();
-  if(calMode==='month'){
-    calM+=delta;
-    if(calM>11){calM=0;calY++;}
-    if(calM<0){calM=11;calY--;}
-  } else {
-    weekAnchor.setDate(weekAnchor.getDate()+delta*7);
-  }
-  renderCal();
+  todayCalM+=delta;
+  if(todayCalM>11){todayCalM=0;todayCalY++;}
+  if(todayCalM<0){todayCalM=11;todayCalY--;}
+  renderToday();
 }
+
+function todayMoToday(){
+  haptic();
+  todayCalY=TODAY.getFullYear();
+  todayCalM=TODAY.getMonth();
+  todaySelDate=fmt(TODAY);
+  renderToday();
+}
+
+// 주간 업무 — 선택된 날짜가 속한 주
+function renderTodayWeeklyTasks(ds){
+  var ymPart=getYM(ds);
+  var wkPart=getWeekNum(ds)+'주';
+  var key=ymPart+' '+wkPart;
+  var weekly=(cache.weekly[key]||[]).slice().sort(priSort);
+
+  var hLabel=document.getElementById('today-weekly-label');
+  var d=new Date(ds+'T00:00:00');
+  var todayD=new Date(fmt(TODAY)+'T00:00:00');
+  // 같은 주인지 판단
+  var anchor=new Date(d); anchor.setDate(d.getDate()-d.getDay());
+  var endOfWeek=new Date(anchor); endOfWeek.setDate(anchor.getDate()+6);
+  var isThisWeek=todayD>=anchor && todayD<=endOfWeek;
+  hLabel.textContent = isThisWeek ? '이번 주 업무 ('+wkPart+')' : ymPart+' '+wkPart+' 업무';
+
+  if(weekly.length===0){
+    document.getElementById('today-weekly-h').style.display='none';
+    document.getElementById('today-weekly').innerHTML='';
+    return;
+  }
+  document.getElementById('today-weekly-h').style.display='flex';
+  document.getElementById('today-weekly').innerHTML=weekly.map(function(t){
+    return '<div class="task">'
+      +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleWeeklyT(\''+t.id+'\',\''+key+'\')"></div>'
+      +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+      +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
+      +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
+      +'<button class="del" onclick="delWeeklyT(\''+t.id+'\',\''+key+'\')">×</button></div>';
+  }).join('');
+}
+
+function toggleWeeklyT(id,key){
+  haptic();
+  var t=(cache.weekly[key]||[]).find(function(x){return x.id===id;});if(!t)return;
+  t.done=!t.done;
+  renderToday();
+  withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+}
+
+function delWeeklyT(id,key){
+  if(!confirm('이 업무를 삭제할까요?'))return;
+  haptic();
+  cache.weekly[key]=(cache.weekly[key]||[]).filter(function(x){return x.id!==id;});
+  renderToday();
+  withSync(function(){return deletePage(id);});
+}
+
+function toggleDaily(id,ds){
+  haptic();
+  var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;
+  t.done=!t.done;
+  renderToday();
+  withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+}
+function delDaily(id,ds){
+  if(!confirm('이 업무를 삭제할까요?'))return;
+  haptic();
+  cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x.id!==id;});
+  renderToday();
+  withSync(function(){return deletePage(id);});
+}
+
 
 /* ============================================================
    GOALS
@@ -926,7 +918,7 @@ function goPage(p){
    ============================================================ */
 function openAddSheet(){
   document.getElementById('add-input').value='';
-  document.getElementById('add-date').value=selDate||todayStr();
+  document.getElementById('add-date').value=todaySelDate||todayStr();
   document.getElementById('add-time').value='';
   setAddType('task');
   document.getElementById('add-bg').classList.add('show');
@@ -1132,12 +1124,12 @@ function addTrip(){
   trips.push({name:name,type:tripType,start:start,end:end});
   saveTrips();
   document.getElementById('trip-name').value='';
-  renderTripsList();renderCal();
+  renderTripsList();renderToday();
   toast('추가됐어요');haptic();
 }
 function delTrip(i){
   if(!confirm('삭제할까요?'))return;
-  trips.splice(i,1);saveTrips();renderTripsList();renderCal();
+  trips.splice(i,1);saveTrips();renderTripsList();renderToday();
 }
 
 /* ============================================================
