@@ -109,6 +109,8 @@ body{
 .mtg-time{font-size:10px;background:var(--meeting);color:#fff;padding:3px 7px;border-radius:8px;flex-shrink:0;font-weight:600;}
 .del{background:none;border:none;color:var(--text3);font-size:18px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;}
 .del:active{color:var(--coral);}
+.move-btn{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:11px;font-weight:600;padding:3px 7px;cursor:pointer;font-family:inherit;flex-shrink:0;white-space:nowrap;}
+.move-btn:active{background:var(--purple-light);color:var(--purple);border-color:var(--purple);}
 
 .empty{text-align:center;color:var(--text3);font-size:13px;padding:24px 8px;}
 
@@ -123,24 +125,25 @@ body{
 .cell{aspect-ratio:1/1.05;border-radius:7px;padding:4px 2px 3px;display:flex;flex-direction:column;align-items:center;font-size:11px;background:transparent;border:none;cursor:pointer;font-family:inherit;color:var(--text);position:relative;}
 .cell .num{font-size:12px;}
 .cell.other .num{color:var(--text3);}
-.cell.today{background:var(--text);}
-.cell.today .num{color:var(--bg);font-weight:700;}
+.cell.today{background:var(--purple-light);}
+.cell.today .num{color:var(--purple-dark);font-weight:700;}
 .cell.sel{background:var(--purple-light);}
 .cell.sel .num{color:var(--purple-dark);font-weight:600;}
-.cell.today.sel{background:var(--text);}
-.cell.today.sel .num{color:var(--bg);}
+.cell.today.sel{background:var(--purple);}
+.cell.today.sel .num{color:#fff;}
 .cell.s .num{color:var(--sun);}
 .cell.t .num{color:var(--blue);}
-.cell.today.s .num,.cell.today.t .num{color:var(--bg);}
+.cell.today.s .num,.cell.today.t .num{color:var(--purple-dark);}
 .cell.holi{background:#FFF8F0;}
 @media(prefers-color-scheme:dark){.cell.holi{background:#2a1a10;}}
 .cell.holi .num{color:#FF6B35;}
-.evs{display:flex;gap:2px;margin-top:auto;flex-wrap:wrap;justify-content:center;align-items:center;min-height:6px;}
-.evdot{width:5px;height:5px;border-radius:50%;}
+.evs{display:flex;flex-direction:row;gap:3px;margin-top:3px;justify-content:center;align-items:center;height:6px;width:100%;}
+.evdot{width:5px;height:5px;min-width:5px;min-height:5px;border-radius:50%;display:inline-block;flex-shrink:0;vertical-align:middle;}
 .evdot.mtg{background:var(--meeting);}
 .evdot.task{background:var(--purple);}
 .evdot.trip{background:var(--trip);}
 .evdot.vacation{background:var(--vacation);}
+.legend-i .evdot{vertical-align:middle;}
 .legend{display:flex;gap:10px;justify-content:center;margin:8px 0 14px;font-size:10px;color:var(--text2);flex-wrap:wrap;}
 .legend-i{display:flex;align-items:center;gap:4px;}
 
@@ -149,8 +152,8 @@ body{
 .wd{aspect-ratio:1/1.3;border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg2);cursor:pointer;border:none;font-family:inherit;color:var(--text);}
 .wd .dn{font-size:9px;color:var(--text2);text-transform:uppercase;}
 .wd .nm{font-size:14px;font-weight:600;margin-top:2px;}
-.wd.today{background:var(--text);color:var(--bg);}
-.wd.today .dn{color:rgba(255,255,255,.7);}
+.wd.today{background:var(--purple-light);color:var(--purple-dark);}
+.wd.today .dn{color:var(--purple-dark);}
 .wd.sel{background:var(--purple);color:#fff;}
 .wd.sel .dn{color:rgba(255,255,255,.8);}
 
@@ -287,10 +290,10 @@ body{
         </div>
         <div class="month" id="today-month-grid"></div>
         <div class="legend">
-          <span class="legend-i"><span class="evdot mtg"></span>미팅</span>
-          <span class="legend-i"><span class="evdot task"></span>업무</span>
-          <span class="legend-i"><span class="evdot trip"></span>출장</span>
-          <span class="legend-i"><span class="evdot vacation"></span>휴가</span>
+          <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--meeting)"/></svg>미팅</span>
+          <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--purple)"/></svg>업무</span>
+          <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--trip)"/></svg>출장</span>
+          <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--vacation)"/></svg>휴가</span>
           <span class="legend-i" style="color:#FF6B35;">● 공휴일</span>
         </div>
       </div>
@@ -331,14 +334,19 @@ body{
         </div>
       </div>
 
-      <div class="stat-bg">
-        <div class="stat-row">
-          <span class="stat-label">연간 진척률</span>
-          <span class="stat-num" id="year-pct">0%</span>
+      <!-- 1. 월간 업무 -->
+      <div style="margin-bottom:8px;">
+        <div class="section-h" style="display:flex;align-items:center;justify-content:space-between;">
+          <span id="monthly-goals-title">이번 달 업무</span>
+          <div style="display:flex;gap:4px;">
+            <button onclick="monthGoalMove(-1)" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">‹</button>
+            <button onclick="monthGoalMove(1)" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">›</button>
+          </div>
         </div>
-        <div class="bar"><div class="bar-fill" id="year-bar" style="width:0%"></div></div>
+        <div id="monthly-goals-list"></div>
       </div>
 
+      <!-- 2. 분기/연간 목표 -->
       <div id="goals-list"></div>
     </div>
 
@@ -740,15 +748,16 @@ function renderToday(){
 
   document.getElementById('today-tasks-h').style.display=others.length>0?'flex':'none';
   document.getElementById('today-tasks-h-label').textContent = isToday ? '오늘 할 일' : (d.getMonth()+1)+'/'+d.getDate()+' 할 일';
+
   if(others.length===0){
     document.getElementById('today-tasks').innerHTML=meetings.length===0?'<div class="empty">'+(isToday?'오늘 할 일이 없어요<br>+ 버튼으로 추가해보세요':'이 날 할 일이 없어요')+'</div>':'';
   } else {
-    document.getElementById('today-tasks').innerHTML=others.map(function(t){
+    document.getElementById('today-tasks').innerHTML=others.map(function(t,i){
       return '<div class="task">'
         +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
         +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
-        +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
+        +'<button class="move-btn" onclick="moveDailyToWeekly(\''+t.id+'\',\''+disp+'\')" title="주간으로 이동">↓주</button>'
         +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
     }).join('');
   }
@@ -788,10 +797,10 @@ function renderTodayMonthGrid(){
     var sunsat=dow===0?'s':dow===6?'t':'';
     var cls='cell'+(c.cur?'':' other')+(isToday?' today':'')+(isSel&&!isToday?' sel':'')+(holi&&c.cur?' holi':'')+(sunsat?' '+sunsat:'');
     var dots='';
-    if(hasMtg)dots+='<span class="evdot mtg"></span>';
-    if(hasTask)dots+='<span class="evdot task"></span>';
-    if(hasTrip)dots+='<span class="evdot trip"></span>';
-    if(hasVac)dots+='<span class="evdot vacation"></span>';
+    if(hasMtg)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--meeting)"/></svg>';
+    if(hasTask)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--purple)"/></svg>';
+    if(hasTrip)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--trip)"/></svg>';
+    if(hasVac)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--vacation)"/></svg>';
     html+='<button class="'+cls+'" onclick="todayMoSelect(\''+ds+'\')"><span class="num">'+c.d+'</span><div class="evs">'+dots+'</div></button>';
   });
   document.getElementById('today-month-grid').innerHTML=html;
@@ -851,7 +860,7 @@ function renderTodayWeeklyTasks(ds){
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleWeeklyT(\''+t.id+'\',\''+key+'\')"></div>'
       +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
-      +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
+      +'<button class="move-btn" onclick="moveWeeklyToDaily(\''+t.id+'\',\''+key+'\')" title="오늘로 이동">↑일</button>'
       +'<button class="del" onclick="delWeeklyT(\''+t.id+'\',\''+key+'\')">×</button></div>';
   }).join('');
 }
@@ -862,6 +871,31 @@ function toggleWeeklyT(id,key){
   t.done=!t.done;
   renderToday();
   withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+}
+
+/* ============================================================
+   이동 버튼 (오늘 ↔ 주간)
+   ============================================================ */
+async function moveDailyToWeekly(id, ds){
+  haptic();
+  var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;
+  var key=getYM(ds)+' '+getWeekNum(ds)+'주';
+  var exists=(cache.weekly[key]||[]).some(function(x){return x.text===t.text;});
+  if(exists){toast('이미 주간 업무에 있어요');return;}
+  await addWeeklyNew(t.text,ds,t.tag,t.pri);
+  renderToday();
+  toast('주간 업무로 이동했어요 ✓');
+}
+
+async function moveWeeklyToDaily(id, key){
+  haptic();
+  var t=(cache.weekly[key]||[]).find(function(x){return x.id===id;});if(!t)return;
+  var ds=todaySelDate||fmt(TODAY);
+  var exists=(cache.daily[ds]||[]).some(function(x){return x.text===t.text;});
+  if(exists){toast('이미 오늘 할 일에 있어요');return;}
+  await addDailyNew(t.text,ds,t.tag,t.pri,false,'');
+  renderToday();
+  toast('오늘 할 일로 이동했어요 ✓');
 }
 
 function delWeeklyT(id,key){
@@ -893,36 +927,98 @@ function delDaily(id,ds){
    ============================================================ */
 function renderGoals(){
   document.getElementById('year-label').textContent=TODAY.getFullYear()+'년';
-  var yr=cache.goals.filter(function(g){return g.div==='연간';});
-  var yrAvg=yr.length===0?0:Math.round(yr.reduce(function(s,g){return s+g.prog;},0)/yr.length);
-  document.getElementById('year-pct').textContent=yrAvg+'%';
-  document.getElementById('year-bar').style.width=yrAvg+'%';
 
-  var QCLS={'연간':'q-year','Q1':'q1','Q2':'q2','Q3':'q3','Q4':'q4'};
   var groups={'연간':[],'Q1':[],'Q2':[],'Q3':[],'Q4':[]};
   cache.goals.forEach(function(g){if(groups[g.div])groups[g.div].push(g);});
   var html='';
-  ['연간','Q1','Q2','Q3','Q4'].forEach(function(div){
+
+  /* 분기 목표 (현재 분기 먼저) */
+  var curQ='Q'+(Math.floor(TODAY.getMonth()/3)+1);
+  var qOrder=[curQ,'Q1','Q2','Q3','Q4'].filter(function(q,i,a){return a.indexOf(q)===i;});
+  qOrder.forEach(function(div){
     var list=groups[div];if(list.length===0)return;
-    html+='<div class="section-h"><span>'+div+' ('+list.filter(function(g){return g.done;}).length+'/'+list.length+')</span></div>';
+    var dc=list.filter(function(g){return g.done;}).length;
+    var pct=list.length?Math.round(dc/list.length*100):0;
+    html+='<div class="section-h"><span>'+div+' 목표 ('+dc+'/'+list.length+')</span></div>';
     list.forEach(function(g){
-      var idx=cache.goals.indexOf(g);
-      html+='<div class="goal-card"><div class="goal-h">'
-        +'<div class="goal-h-l">'
+      html+='<div class="task">'
         +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal(\''+g.id+'\')"></div>'
-        +'<span class="goal-name'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
-        +'</div>'
-        +'<span class="goal-pct">'+g.prog+'%</span>'
-        +'</div>'
-        +'<div class="bar"><div class="bar-fill" style="width:'+g.prog+'%"></div></div>'
-        +'<div class="goal-foot">'
-        +'<input type="range" min="0" max="100" value="'+g.prog+'" step="5" oninput="updGoalProg(\''+g.id+'\',this.value)">'
-        +'<button class="del" onclick="delGoal(\''+g.id+'\')">×</button>'
-        +'</div></div>';
+        +'<span class="task-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'<span style="font-size:11px;color:var(--text2);flex-shrink:0;">'+g.prog+'%</span>'
+        +'<button class="del" onclick="delGoal(\''+g.id+'\')">×</button></div>';
     });
+    /* 분기 진척률 바 */
+    html+='<div class="stat-bg" style="padding:8px 12px;margin-top:4px;margin-bottom:12px;">'
+      +'<div class="stat-row"><span class="stat-label">'+div+' 진척률</span><span class="stat-num">'+pct+'%</span></div>'
+      +'<div class="bar"><div class="bar-fill" style="width:'+pct+'%"></div></div></div>';
   });
+
+  /* 연간 목표 */
+  var yrList=groups['연간'];
+  if(yrList.length>0){
+    var yrDc=yrList.filter(function(g){return g.done;}).length;
+    var yrAvg=Math.round(yrList.reduce(function(s,g){return s+g.prog;},0)/yrList.length);
+    html+='<div class="section-h"><span>연간 목표 ('+yrDc+'/'+yrList.length+')</span></div>';
+    yrList.forEach(function(g){
+      html+='<div class="task">'
+        +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal(\''+g.id+'\')"></div>'
+        +'<span class="task-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'<span style="font-size:11px;color:var(--text2);flex-shrink:0;">'+g.prog+'%</span>'
+        +'<button class="del" onclick="delGoal(\''+g.id+'\')">×</button></div>';
+    });
+    /* 연간 진척률 바 */
+    html+='<div class="stat-bg" style="padding:8px 12px;margin-top:4px;">'
+      +'<div class="stat-row"><span class="stat-label">연간 진척률</span><span class="stat-num" id="year-pct">'+yrAvg+'%</span></div>'
+      +'<div class="bar"><div class="bar-fill" id="year-bar" style="width:'+yrAvg+'%"></div></div></div>';
+  }
+
   if(html===''){html='<div class="empty">목표를 추가해보세요<br>+ 버튼 → 목표 탭</div>';}
   document.getElementById('goals-list').innerHTML=html;
+
+  /* 월간 업무 렌더 */
+  renderMonthlyGoals();
+}
+
+var selMonthGoal = TODAY.getMonth();
+function monthGoalMove(d){
+  selMonthGoal = (selMonthGoal + d + 12) % 12;
+  renderMonthlyGoals();
+}
+function renderMonthlyGoals(){
+  var MONTHS_KR=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var titleEl=document.getElementById('monthly-goals-title');
+  var listEl=document.getElementById('monthly-goals-list');
+  if(!titleEl)return;
+  titleEl.textContent=MONTHS_KR[selMonthGoal]+' 업무';
+  var tasks=(cache.monthly[selMonthGoal]||[]).slice().sort(priSort);
+  var done=tasks.filter(function(t){return t.done;}).length;
+  if(listEl){
+    if(tasks.length===0){
+      listEl.innerHTML='<div class="empty">'+MONTHS_KR[selMonthGoal]+' 업무가 없어요</div>';
+    } else {
+      listEl.innerHTML=tasks.map(function(t){
+        return '<div class="task">'
+          +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthlyGoal(\''+t.id+'\')"></div>'
+          +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+          +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
+          +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
+          +'<button class="del" onclick="delMonthlyGoal(\''+t.id+'\')">×</button></div>';
+      }).join('');
+    }
+  }
+}
+function toggleMonthlyGoal(id){
+  haptic();
+  var t=(cache.monthly[selMonthGoal]||[]).find(function(x){return x.id===id;});if(!t)return;
+  t.done=!t.done;renderMonthlyGoals();
+  withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+}
+function delMonthlyGoal(id){
+  if(!confirm('이 업무를 삭제할까요?'))return;
+  haptic();
+  cache.monthly[selMonthGoal]=(cache.monthly[selMonthGoal]||[]).filter(function(x){return x.id!==id;});
+  renderMonthlyGoals();
+  withSync(function(){return deletePage(id);});
 }
 
 function toggleGoal(id){
@@ -1227,15 +1323,50 @@ function exportICS(){
 /* ============================================================
    INIT
    ============================================================ */
+function loadMockData(){
+  var ds = fmt(TODAY);
+  var wKey = getYM(ds)+' '+getWeekNum(ds)+'주';
+  cache.daily[ds] = [
+    {id:'m1',text:'카카오 미팅',done:false,tag:'미팅',pri:'높음',isMeeting:true,meetingTime:'10:00'},
+    {id:'m2',text:'플랫폼 업데이트',done:false,tag:'업무',pri:'높음',isMeeting:false,meetingTime:''},
+    {id:'m3',text:'커머스 업무리뷰',done:false,tag:'업무',pri:'높음',isMeeting:false,meetingTime:''},
+    {id:'m4',text:'계산서 발행',done:true,tag:'업무',pri:'보통',isMeeting:false,meetingTime:''},
+    {id:'m5',text:'세무사 이메일',done:true,tag:'업무',pri:'보통',isMeeting:false,meetingTime:''},
+  ];
+  cache.weekly[wKey] = [
+    {id:'w1',text:'샘플정리방안수립',done:false,tag:'업무',pri:'높음'},
+    {id:'w2',text:'RH VI next collection 기획',done:false,tag:'업무',pri:'높음'},
+    {id:'w3',text:'PB사업 (1건)',done:false,tag:'업무',pri:'보통'},
+    {id:'w4',text:'JPRO 런칭',done:true,tag:'업무',pri:'높음'},
+  ];
+  cache.monthly[TODAY.getMonth()] = [
+    {id:'mo1',text:'VI매출 1천만원',done:false,tag:'업무',pri:'높음'},
+    {id:'mo2',text:'OEM 비즈관리 클로드 개발',done:false,tag:'업무',pri:'높음'},
+    {id:'mo3',text:'JPRO 런칭',done:true,tag:'업무',pri:'높음'},
+    {id:'mo4',text:'PB 사업진행',done:true,tag:'업무',pri:'높음'},
+  ];
+  cache.goals = [
+    {id:'g1',text:'브랜드 팝업 진행',done:false,prog:30,div:'Q2',cat:'업무'},
+    {id:'g2',text:'(4~6)JPRO 런칭 및 베티테스트',done:false,prog:60,div:'Q2',cat:'업무'},
+    {id:'g3',text:'채용 1명',done:false,prog:10,div:'Q2',cat:'업무'},
+    {id:'g4',text:'연간 매출 10억',done:false,prog:20,div:'연간',cat:'재무'},
+    {id:'g5',text:'브랜드 2개 런칭',done:false,prog:50,div:'연간',cat:'업무'},
+  ];
+  trips = [
+    {name:'부산 출장',type:'trip',start:fmt(new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()+3)),end:fmt(new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()+5))},
+  ];
+  setSync('ok','임시 데이터');
+  renderAll();
+}
+
 window.addEventListener('load',function(){
-  // PWA: register service worker (optional, inline)
-  // 시작
-  loadAll();
+  loadMockData(); /* 임시 데이터로 테스트 */
+  /* loadAll(); */ /* 실제 노션 연동 시 이걸로 교체 */
 });
 
 // 백그라운드에서 돌아오면 자동 새로고침
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden){loadAll();}
+  if(!document.hidden){loadMockData();}
 });
 </script>
 
