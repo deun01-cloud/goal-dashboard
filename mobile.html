@@ -304,6 +304,16 @@ body{
       </div>
 
       <div id="today-meetings"></div>
+      <!-- 이월 알림 -->
+      <div id="carry-notice" style="display:none;background:var(--amber-light);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--amber-dark);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span>⏰</span><span id="carry-text" style="flex:1;font-weight:500;"></span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="applyCarryOver()" style="flex:1;padding:8px;background:var(--amber-dark);color:#fff;border:none;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;">가져오기</button>
+          <button onclick="dismissCarryOver()" style="flex:1;padding:8px;background:transparent;border:1px solid var(--amber-dark);color:var(--amber-dark);border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;">닫기</button>
+        </div>
+      </div>
       <div class="section-h" id="today-tasks-h" style="display:none;"><span id="today-tasks-h-label">할 일</span></div>
       <div id="today-tasks"></div>
 
@@ -636,7 +646,50 @@ async function loadAll(){
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
     setSync('ok');
     renderAll();
+    checkCarryOver();
   }catch(e){setSync('error',e.message);console.error(e);toast('연동 실패');}
+}
+
+/* ============================================================
+   CARRY-OVER (전날 미완료 이월)
+   ============================================================ */
+var carryPending=[];
+function prevWorkday(ds){
+  var d=new Date(ds+'T00:00:00');
+  d.setDate(d.getDate()-1);
+  while(d.getDay()===0||d.getDay()===6){d.setDate(d.getDate()-1);}
+  return fmt(d);
+}
+function checkCarryOver(){
+  /* 오늘만 체크, 하루 한 번만 */
+  if(localStorage.getItem('carry_dismissed_'+fmt(TODAY)))return;
+  var prev=prevWorkday(fmt(TODAY));
+  var pending=(cache.daily[prev]||[]).filter(function(t){return !t.done&&!t.isMeeting;});
+  if(pending.length>0){
+    carryPending=pending;
+    document.getElementById('carry-text').textContent=prev+' 미완료 업무 '+pending.length+'개 — 오늘로 가져올까요?';
+    document.getElementById('carry-notice').style.display='block';
+  }
+}
+async function applyCarryOver(){
+  document.getElementById('carry-notice').style.display='none';
+  localStorage.setItem('carry_dismissed_'+fmt(TODAY),'1');
+  var ds=fmt(TODAY);
+  for(var i=0;i<carryPending.length;i++){
+    var t=carryPending[i];
+    var exists=(cache.daily[ds]||[]).some(function(x){return x.text===t.text;});
+    if(!exists){
+      await addDailyNew(t.text,ds,t.tag,t.pri,false,'');
+    }
+  }
+  carryPending=[];
+  renderToday();
+  toast('이월 완료!');
+}
+function dismissCarryOver(){
+  document.getElementById('carry-notice').style.display='none';
+  localStorage.setItem('carry_dismissed_'+fmt(TODAY),'1');
+  carryPending=[];
 }
 
 /* ============================================================
