@@ -618,7 +618,14 @@ var trips=JSON.parse(localStorage.getItem('db_trips')||'[]');
 
 function saveTrips(){localStorage.setItem('db_trips',JSON.stringify(trips));}
 
+var _isMockMode = false; /* 임시 데이터 모드면 true */
+
+function isValidUUID(id){
+  return /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i.test(id);
+}
+
 async function withSync(fn){
+  if(_isMockMode){return;} /* 임시 데이터 모드면 API 호출 안 함 */
   setSync('syncing');
   try{await fn();setSync('ok');}
   catch(e){setSync('error',e.message);console.error(e);toast('오류: '+e.message);}
@@ -1324,6 +1331,7 @@ function exportICS(){
    INIT
    ============================================================ */
 function loadMockData(){
+  _isMockMode = true;
   var ds = fmt(TODAY);
   var wKey = getYM(ds)+' '+getWeekNum(ds)+'주';
   cache.daily[ds] = [
