@@ -683,7 +683,8 @@ function renderDashboard(){
   var mHtml='<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;font-weight:500;">'+(TODAY.getMonth()+1)+'월</span><span style="font-size:12px;color:var(--text2);">'+mT.filter(function(t){return t.done;}).length+'/'+mT.length+' 완료</span></div>';
   mHtml+=mSorted.length===0?'<div style="color:var(--text3);font-size:13px;">월간 업무 탭에서 추가하세요</div>'
     :mSorted.map(function(t,i){return'<div class="item-row"><div class="cb'+(t.done?' done':'')+'" onclick="dashToggleMonthly('+i+')"></div><span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span><span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';}).join('');
-  document.getElementById('dash-month').innerHTML=mHtml;
+  var mEl=document.getElementById('dash-month');
+  if(mEl)mEl.innerHTML=mHtml;
 }
 function dashToggleDaily(i){var s=td_sorted();var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
 function mobileTodayToggle(i){var s=(cache.daily[todayStr()]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
