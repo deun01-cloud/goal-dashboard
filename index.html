@@ -684,45 +684,6 @@ function renderDashboard(){
   mHtml+=mSorted.length===0?'<div style="color:var(--text3);font-size:13px;">월간 업무 탭에서 추가하세요</div>'
     :mSorted.map(function(t,i){return'<div class="item-row"><div class="cb'+(t.done?' done':'')+'" onclick="dashToggleMonthly('+i+')"></div><span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span><span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';}).join('');
   document.getElementById('dash-month').innerHTML=mHtml;
-
-  var QCLS={Q1:'q1',Q2:'q2',Q3:'q3',Q4:'q4'};
-  var qDone=qg.filter(function(g){return g.done;}).length;
-  var qTotal=qg.length;
-  var qPct=qTotal===0?0:Math.round(qDone/qTotal*100);
-  var qHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span class="q-badge '+(QCLS[curQL]||'q1')+'">'+curQL+'</span><span style="font-size:12px;color:var(--text2);">'+qDone+'/'+qTotal+' 완료</span></div>';
-  qHtml+=qTotal===0?'<div style="color:var(--text3);font-size:13px;">분기 목표를 추가해보세요</div>'
-    :qg.map(function(g){var idx=cache.goals.indexOf(g);return'<div class="item-row"><div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal('+idx+')"></div><span class="item-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span></div>';}).join('');
-  document.getElementById('dash-q').innerHTML=qHtml;
-  /* 분기 진척률 바 */
-  var qWrap=document.getElementById('ds-q-prog-wrap');
-  if(qWrap)qWrap.style.display=qTotal>0?'block':'none';
-  var qFill=document.getElementById('ds-q-prog-fill');
-  var qPctEl=document.getElementById('ds-q-pct-label');
-  var qDoneEl=document.getElementById('ds-q-done-label');
-  var qLeftEl=document.getElementById('ds-q-left-label');
-  if(qFill)qFill.style.width=qPct+'%';
-  if(qPctEl)qPctEl.textContent=qPct+'%';
-  if(qDoneEl)qDoneEl.textContent='완료 '+qDone+'개';
-  if(qLeftEl)qLeftEl.textContent='남은 '+(qTotal-qDone)+'개';
-
-  var avg=yr.length===0?0:Math.round(yr.reduce(function(s,g){return s+g.prog;},0)/yr.length);
-  var yrDone100=yr.filter(function(g){return g.prog===100;}).length;
-  document.getElementById('dash-year-prog').innerHTML=yr.length===0
-    ?'<div style="color:var(--text3);font-size:13px;">연간 목표를 추가해보세요</div>'
-    :'<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text2);">완료 <strong style="color:var(--text);">'+yrDone100+'</strong> / 전체 <strong style="color:var(--text);">'+yr.length+'</strong>개</span><span style="font-size:18px;font-weight:600;color:var(--purple);">'+avg+'%</span></div>'
-    +'<div class="prog-bar" style="height:10px;border-radius:5px;"><div class="prog-fill fill-purple" style="width:'+avg+'%;border-radius:5px;"></div></div>';
-  /* 연간 진척률 바 */
-  var yWrap=document.getElementById('ds-year-prog-wrap');
-  if(yWrap)yWrap.style.display=yr.length>0?'block':'none';
-  var yFill=document.getElementById('ds-year-prog-fill');
-  var yPctEl=document.getElementById('ds-year-pct-label');
-  var yDoneEl=document.getElementById('ds-year-done-label');
-  var yLeftEl=document.getElementById('ds-year-left-label');
-  var yPct=yr.length===0?0:Math.round(yrDone100/yr.length*100);
-  if(yFill)yFill.style.width=yPct+'%';
-  if(yPctEl)yPctEl.textContent=yPct+'%';
-  if(yDoneEl)yDoneEl.textContent='완료 '+yrDone100+'개';
-  if(yLeftEl)yLeftEl.textContent='남은 '+(yr.length-yrDone100)+'개';
 }
 function dashToggleDaily(i){var s=td_sorted();var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
 function mobileTodayToggle(i){var s=(cache.daily[todayStr()]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
