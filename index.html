@@ -66,6 +66,9 @@
   .meeting-row{background:var(--meeting-light);border-left:3px solid var(--meeting);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding-left:6px;}
   .meeting-badge{font-size:10px;background:var(--meeting);color:#fff;padding:1px 6px;border-radius:8px;flex-shrink:0;}
   .carry-badge{font-size:10px;background:#FFF3CD;color:#856404;padding:1px 6px;border-radius:8px;flex-shrink:0;}
+  .repeat-badge{font-size:10px;background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:8px;flex-shrink:0;}
+  .item-row.repeat-row{background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(21,101,192,.04) 6px,rgba(21,101,192,.04) 12px);}
+  .item-row.repeat-row:hover{background:rgba(21,101,192,.08);}
   .del-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:0 2px;line-height:1;font-family:inherit;flex-shrink:0;}
   .del-btn:hover{color:#c0392b;}
   .add-row{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;}
@@ -270,6 +273,16 @@
         <input type="text" id="daily-new" placeholder="새 업무 추가..." onkeydown="if(event.key==='Enter')addDailyTask()" style="flex:2;">
         <select id="daily-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="학습">학습</option></select>
         <select id="daily-pri"><option value="높음">높음</option><option value="보통">보통</option><option value="낮음">낮음</option></select>
+        <select id="daily-repeat" title="반복 설정">
+          <option value="">반복 없음</option>
+          <optgroup label="매주">
+            <option value="매주월">매주 월</option><option value="매주화">매주 화</option><option value="매주수">매주 수</option><option value="매주목">매주 목</option><option value="매주금">매주 금</option><option value="매주토">매주 토</option><option value="매주일">매주 일</option>
+          </optgroup>
+          <optgroup label="격주">
+            <option value="격주월">격주 월</option><option value="격주화">격주 화</option><option value="격주수">격주 수</option><option value="격주목">격주 목</option><option value="격주금">격주 금</option><option value="격주토">격주 토</option><option value="격주일">격주 일</option>
+          </optgroup>
+          <option value="매월">매월 (같은 날)</option>
+        </select>
         <button class="btn btn-primary" onclick="addDailyTask()">추가</button>
       </div>
       <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
@@ -277,6 +290,16 @@
         <div class="add-row" style="margin-top:0;">
           <input type="text" id="meeting-new" placeholder="미팅 제목..." onkeydown="if(event.key==='Enter')addMeetingTask()" style="flex:2;">
           <input type="time" id="meeting-time" style="flex:none;width:110px;">
+          <select id="meeting-repeat" title="반복 설정">
+            <option value="">반복 없음</option>
+            <optgroup label="매주">
+              <option value="매주월">매주 월</option><option value="매주화">매주 화</option><option value="매주수">매주 수</option><option value="매주목">매주 목</option><option value="매주금">매주 금</option><option value="매주토">매주 토</option><option value="매주일">매주 일</option>
+            </optgroup>
+            <optgroup label="격주">
+              <option value="격주월">격주 월</option><option value="격주화">격주 화</option><option value="격주수">격주 수</option><option value="격주목">격주 목</option><option value="격주금">격주 금</option><option value="격주토">격주 토</option><option value="격주일">격주 일</option>
+            </optgroup>
+            <option value="매월">매월 (같은 날)</option>
+          </select>
           <button class="btn btn-meeting" onclick="addMeetingTask()">미팅 추가</button>
         </div>
       </div>
@@ -369,7 +392,8 @@ var DB = {
   daily:   '8b7c36b1-d38d-4273-aa24-8c652b8c82ea',
   weekly:  '4d11f07e-af50-4907-92b1-d271e9697735',
   monthly: '74a5bc52-bfe2-4d69-9a55-9bed245fbdaf',
-  goals:   '3765e663-3065-4a2f-b521-ed017eb3d1d2'
+  goals:   '3765e663-3065-4a2f-b521-ed017eb3d1d2',
+  trips:   '5c4bf5d4-afd9-4f62-9952-23bec5cda3f6'
 };
 
 /* ============================================================
@@ -432,6 +456,7 @@ function pCheck(v){return{checkbox:v};}
 function pSelect(v){return{select:{name:v}};}
 function pNumber(v){return{number:v};}
 function pDate(v){return{date:{start:v}};}
+function pDateRange(s,e){return{date:{start:s,end:e}};}
 function pText(v){return{rich_text:[{text:{content:v}}]};}
 function rTitle(p,k){var t=p[k];if(!t||!t.title)return'';return(t.title[0]&&t.title[0].plain_text)||'';}
 function rCheck(p,k){return!!(p[k]&&p[k].checkbox);}
@@ -440,6 +465,10 @@ function rNumber(p,k){return(p[k]&&p[k].number)||0;}
 function rDate(p,k){
   var v=(p[k]&&p[k].date&&p[k].date.start)||'';
   /* datetime (2026-04-20T17:00:00) 이면 날짜 부분만 추출 */
+  return v?v.split('T')[0]:'';
+}
+function rDateEnd(p,k){
+  var v=(p[k]&&p[k].date&&p[k].date.end)||'';
   return v?v.split('T')[0]:'';
 }
 function rDateTime(p,k){
@@ -453,10 +482,58 @@ function rDateTime(p,k){
 function rText(p,k){var t=p[k];if(!t||!t.rich_text)return'';return(t.rich_text[0]&&t.rich_text[0].plain_text)||'';}
 
 /* ============================================================
+   REPEAT (반복 일정 가상 표시)
+============================================================ */
+/* 반복 옵션과 요일 매핑. 일=0, 월=1, ..., 토=6 */
+var REPEAT_DOW={'매주월':1,'매주화':2,'매주수':3,'매주목':4,'매주금':5,'매주토':6,'매주일':0,
+                '격주월':1,'격주화':2,'격주수':3,'격주목':4,'격주금':5,'격주토':6,'격주일':0};
+var REPEAT_HORIZON_DAYS=185; /* 약 6개월 — 미래 한정 표시 범위 */
+
+/* ds에 보여야 할 반복 가상 항목들(원본 cache.daily의 다른 날짜에서 온 것)을 반환 */
+function getRepeatsForDate(ds){
+  if(!ds)return[];
+  var target=new Date(ds+'T00:00:00');
+  var todayD=new Date(todayStr()+'T00:00:00');
+  /* 오늘 기준 미래 6개월까지만 가상 표시(과거는 원본 그대로) */
+  var horizon=new Date(todayD);horizon.setDate(horizon.getDate()+REPEAT_HORIZON_DAYS);
+  if(target<todayD||target>horizon)return[];
+  var out=[];
+  Object.keys(cache.daily).forEach(function(srcDs){
+    (cache.daily[srcDs]||[]).forEach(function(t){
+      if(!t.repeat||t.repeat==='없음')return;
+      /* 원본 날짜 본인은 skip — cache에 이미 있으므로 중복 방지 */
+      if(srcDs===ds)return;
+      /* 원본보다 이전 날짜에는 표시하지 않음 */
+      if(ds<srcDs)return;
+      var src=new Date(srcDs+'T00:00:00');
+      var rep=t.repeat;
+      var match=false;
+      if(rep==='매월'){
+        /* 같은 일(day) */
+        if(target.getDate()===src.getDate())match=true;
+      } else if(REPEAT_DOW.hasOwnProperty(rep)){
+        var wantedDow=REPEAT_DOW[rep];
+        if(target.getDay()!==wantedDow){match=false;}
+        else if(rep.indexOf('매주')===0){match=true;}
+        else if(rep.indexOf('격주')===0){
+          /* 원본 이후 경과 일수 / 7 이 짝수면 매칭 */
+          var diffDays=Math.round((target-src)/(86400000));
+          if(diffDays>0&&Math.floor(diffDays/7)%2===0)match=true;
+        }
+      }
+      if(match){
+        out.push({id:'rep-'+t.id+'-'+ds,srcId:t.id,srcDate:srcDs,text:t.text,done:false,tag:t.tag,pri:t.pri,isMeeting:t.isMeeting,meetingTime:t.meetingTime,repeat:rep,_isRepeat:true});
+      }
+    });
+  });
+  return out;
+}
+
+/* ============================================================
    CACHE & STATE
 ============================================================ */
 var cache={daily:{},weekly:{},monthly:{},goals:[]};
-var trips=JSON.parse(localStorage.getItem('db_trips')||'[]');
+var trips=[];
 var selDailyDate=todayStr();
 var selMonthly=TODAY.getMonth();
 var _weekKeyList=[];
@@ -464,15 +541,13 @@ var selWeekKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
 var carryPending=[];
 var _dDrag=null,_wDrag=null,_mDrag=null;
 
-function saveTrips(){localStorage.setItem('db_trips',JSON.stringify(trips));}
-
 /* ============================================================
    LOAD
 ============================================================ */
 async function loadAll(){
   setSync('syncing','노션에서 데이터 불러오는 중...');
   try{
-    var[dR,wR,mR,gR]=await Promise.all([queryDB(DB.daily),queryDB(DB.weekly),queryDB(DB.monthly),queryDB(DB.goals)]);
+    var[dR,wR,mR,gR,tR]=await Promise.all([queryDB(DB.daily),queryDB(DB.weekly),queryDB(DB.monthly),queryDB(DB.goals),queryDB(DB.trips)]);
     cache.daily={};
     dR.forEach(function(p){
       var pr=p.properties,ds=rDate(pr,'날짜');if(!ds)return;
@@ -480,7 +555,7 @@ async function loadAll(){
       var isMtg=rSelect(pr,'태그')==='미팅';
       /* 미팅 시간: datetime에서 추출 우선, 없으면 메모에서 */
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||''});
     });
     cache.weekly={};
     wR.forEach(function(p){
@@ -495,10 +570,45 @@ async function loadAll(){
       cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통'});
     });
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
+    trips=tR.map(function(p){
+      var pr=p.properties;
+      var s=rDate(pr,'기간'),e=rDateEnd(pr,'기간')||s;
+      var sel=rSelect(pr,'종류');
+      return{id:p.id,name:rTitle(pr,'이름'),type:sel==='휴가'?'vacation':'trip',start:s,end:e};
+    }).filter(function(t){return t.name&&t.start;});
+    /* 기존 localStorage 데이터가 남아있으면 1회 마이그레이션 */
+    await migrateLocalTrips();
     setSync('ok','노션 연동 완료 ✓  ('+new Date().toLocaleTimeString()+')');
     checkCarryOver();
     renderAll();
   }catch(e){setSync('error','연동 오류: '+e.message);console.error(e);}
+}
+
+async function migrateLocalTrips(){
+  try{
+    var raw=localStorage.getItem('db_trips');
+    if(!raw)return;
+    var local=JSON.parse(raw);
+    if(!Array.isArray(local)||local.length===0){localStorage.removeItem('db_trips');return;}
+    /* 노션에 이미 있는 항목과 중복 방지: name+start+end 키로 비교 */
+    var existing={};
+    trips.forEach(function(t){existing[t.name+'|'+t.start+'|'+t.end]=true;});
+    for(var i=0;i<local.length;i++){
+      var t=local[i];
+      if(!t||!t.name||!t.start)continue;
+      var end=t.end||t.start;
+      var key=t.name+'|'+t.start+'|'+end;
+      if(existing[key])continue;
+      var typeKor=t.type==='vacation'?'휴가':'출장';
+      var id=await createPage(DB.trips,{
+        '이름':pTitle(t.name),
+        '종류':pSelect(typeKor),
+        '기간':{date:{start:t.start,end:end}}
+      });
+      trips.push({id:id,name:t.name,type:t.type==='vacation'?'vacation':'trip',start:t.start,end:end});
+    }
+    localStorage.removeItem('db_trips');
+  }catch(e){console.warn('trips 마이그레이션 실패:',e);}
 }
 
 /* ============================================================
@@ -509,7 +619,7 @@ function checkCarryOver(){
   /* 오늘 이미 처리했으면 안 보여줌 */
   if(localStorage.getItem('carry_dismissed_'+todayStr()))return;
   var prev=prevWorkday(todayStr());
-  var pending=(cache.daily[prev]||[]).filter(function(t){return !t.done&&!t.isMeeting;});
+  var pending=(cache.daily[prev]||[]).filter(function(t){return !t.done&&!t.isMeeting&&!t.repeat;});
   if(pending.length>0){
     carryPending=pending;
     document.getElementById('carry-text').textContent=prev+' 미완료 업무 '+pending.length+'개 — 오늘로 가져올까요?';
@@ -554,7 +664,9 @@ function renderCal(){
     var ds=c.cur?(calY+'-'+pad(calM+1)+'-'+pad(c.d)):'';
     var holiday=ds?HOLIDAYS[ds]:'';
     var tripsDay=ds?trips.filter(function(tr){return tr.start<=ds&&ds<=tr.end;}).slice(0,1):[];
-    var evs=ds&&cache.daily[ds]?cache.daily[ds]:[];
+    var evs=ds&&cache.daily[ds]?cache.daily[ds].slice():[];
+    /* 반복 가상 항목 추가 */
+    if(ds){var reps=getRepeatsForDate(ds);if(reps.length)evs=evs.concat(reps);}
     var meetings=evs.filter(function(t){return t.isMeeting||t.tag==='미팅';});
     var normals=evs.filter(function(t){return !t.isMeeting&&t.tag!=='미팅';});
     var sunsat=dow===0?'sun':dow===6?'sat':'';
@@ -562,8 +674,8 @@ function renderCal(){
     var inner='<div class="dn'+(sunsat&&c.cur?' '+sunsat:'')+'">'+c.d+'</div>';
     if(holiday&&c.cur)inner+='<span class="holiday-lbl">🔴'+escHtml(holiday)+'</span>';
     tripsDay.forEach(function(tr){inner+='<span class="trip-bar '+tr.type+'">'+escHtml(tr.name)+'</span>';});
-    meetings.slice(0,2).forEach(function(t){inner+='<span class="dev dev-meeting">'+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';});
-    normals.slice(0,2).forEach(function(t){inner+='<span class="dev '+devCls(t.tag)+'">'+(t.done?'✓ ':'')+escHtml(t.text)+'</span>';});
+    meetings.slice(0,2).forEach(function(t){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';});
+    normals.slice(0,2).forEach(function(t){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';});
     var more=(meetings.length+normals.length)-4;if(more>0)inner+='<span class="dev" style="color:var(--text3);">+'+more+'개</span>';
     h+='<div class="'+cls+'" onclick="'+(c.cur?'calClick(\''+ds+'\')':'')+'">' +inner+'</div>';
   });
@@ -813,26 +925,50 @@ function renderDailyTasks(){
   var dlabel=document.getElementById('daily-date-label');
   if(dlabel)dlabel.textContent=d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+DAYS[d.getDay()]+'요일';
   var tasks=getDailyOrdered(selDailyDate);
+  var repeats=getRepeatsForDate(selDailyDate);
   var done=tasks.filter(function(t){return t.done;}).length;
+  /* 카운트는 원본 일정 기준만(반복 가상 항목 제외) */
   var elTotal=document.getElementById('dd-total');if(elTotal)elTotal.innerHTML='<span class="done-n">'+tasks.length+'</span>';
   setFrac('dd-done-frac',done,tasks.length);
   var elLeft=document.getElementById('dd-left');if(elLeft)elLeft.innerHTML='<span class="done-n">'+(tasks.length-done)+'</span>';
   var elPct=document.getElementById('dd-pct');if(elPct)elPct.innerHTML='<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
-  var html=tasks.length===0?'<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 업무를 추가해보세요</div>':'';
+  var html=(tasks.length===0&&repeats.length===0)?'<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 업무를 추가해보세요</div>':'';
   if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정</div>';
   tasks.forEach(function(t,i){
     var isMtg=t.isMeeting||t.tag==='미팅';
+    var repBadge=t.repeat?'<span class="repeat-badge" title="이 일정은 반복됩니다">🔁 '+t.repeat+'</span>':'';
     html+='<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="_dDrag='+i+'" ondragover="event.preventDefault();event.currentTarget.classList.add(\'drag-over\')" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="_dropDaily(event,'+i+')">'
       +'<span class="drag-handle">⠿</span>'
       +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDailyByIdx('+i+')"></div>'
       +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditDaily('+i+',this)">'+escHtml(t.text)+'</span>'
       +(t.isCarried?'<span class="carry-badge">이월</span>':'')
+      +repBadge
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleDailyPri('+i+')" title="클릭하여 우선순위 변경">'+t.pri+'</span>'
       +'<button class="del-btn" onclick="delDailyByIdx('+i+')">&#10005;</button></div>';
   });
+  /* 반복 가상 항목 표시 (체크/삭제/편집 불가, 원본으로 이동만 가능) */
+  if(repeats.length){
+    html+='<div class="edit-hint" style="margin-top:8px;">🔁 반복 일정 (원본 일자로 이동해 수정)</div>';
+    repeats.forEach(function(t){
+      var isMtg=t.isMeeting||t.tag==='미팅';
+      html+='<div class="item-row repeat-row'+(isMtg?' meeting-row':'')+'" onclick="jumpToRepeatSrc(\''+t.srcDate+'\')" title="원본 일자(' +t.srcDate+ ')로 이동" style="cursor:pointer;opacity:.85;">'
+        +'<span class="drag-handle">🔁</span>'
+        +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
+        +'<span class="item-text" style="color:var(--text2);">'+escHtml(t.text)+'</span>'
+        +'<span class="repeat-badge">'+t.repeat+'</span>'
+        +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
+        +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
+        +'</div>';
+    });
+  }
   document.getElementById('daily-list').innerHTML=html;
+}
+function jumpToRepeatSrc(ds){
+  selDailyDate=ds;
+  var dp=document.getElementById('daily-date-picker');if(dp)dp.value=ds;
+  renderDailyTasks();
 }
 function _dropDaily(e,i){
   e.preventDefault();e.currentTarget.classList.remove('drag-over');
@@ -861,9 +997,9 @@ function delDailyByIdx(i){
   withSync(function(){return deletePage(t.id);});
 }
 function doToggleDaily(id,ds){var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderDailyTasks();renderCal();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
-async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried){
+async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat){
   var ds=selDailyDate;
-  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried};
+  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried,repeat:repeat||''};
   if(!cache.daily[ds])cache.daily[ds]=[];cache.daily[ds].push(opt);
   var props={'업무':pTitle(text),'태그':pSelect(isMtg?'미팅':tag),'우선순위':pSelect(pri),'완료':pCheck(false)};
   /* 미팅이고 시간이 있으면 datetime으로 저장 → 노션 캘린더 앱에서 인식 */
@@ -877,20 +1013,25 @@ async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried){
     props['날짜']=pDate(ds);
   }
   if(time)props['메모']=pText(time);
+  if(repeat)props['반복']=pSelect(repeat);
   await withSync(async function(){var id=await createPage(DB.daily,props);opt.id=id;});
 }
 async function addDailyTask(){
   var v=document.getElementById('daily-new').value.trim();if(!v)return;
   var tag=document.getElementById('daily-tag').value,pri=document.getElementById('daily-pri').value;
+  var rep=document.getElementById('daily-repeat').value||'';
   document.getElementById('daily-new').value='';
-  await _addDailyRaw(v,tag,pri,false,'',false);
+  document.getElementById('daily-repeat').value='';
+  await _addDailyRaw(v,tag,pri,false,'',false,rep);
   renderDailyTasks();renderCal();renderDashboard();
 }
 async function addMeetingTask(){
   var v=document.getElementById('meeting-new').value.trim();if(!v)return;
   var time=document.getElementById('meeting-time').value||'';
+  var rep=document.getElementById('meeting-repeat').value||'';
   document.getElementById('meeting-new').value='';document.getElementById('meeting-time').value='';
-  await _addDailyRaw(v,'미팅','높음',true,time,false);
+  document.getElementById('meeting-repeat').value='';
+  await _addDailyRaw(v,'미팅','높음',true,time,false,rep);
   renderDailyTasks();renderCal();renderDashboard();
 }
 
@@ -1010,22 +1151,52 @@ function renderTrips(){
 }
 function startEditTrip(i){trips[i]._editing=true;renderTrips();}
 function cancelEditTrip(i){delete trips[i]._editing;renderTrips();}
-function saveTrip(i){delete trips[i]._editing;if(trips[i].end<trips[i].start)trips[i].end=trips[i].start;saveTrips();renderTrips();renderCal();}
-function addTrip(){
+async function saveTrip(i){
+  delete trips[i]._editing;
+  if(trips[i].end<trips[i].start)trips[i].end=trips[i].start;
+  var t=trips[i];
+  if(t.id){
+    await withSync(async function(){
+      await updatePage(t.id,{
+        '이름':pTitle(t.name),
+        '종류':pSelect(t.type==='vacation'?'휴가':'출장'),
+        '기간':{date:{start:t.start,end:t.end}}
+      });
+    });
+  }
+  renderTrips();renderCal();
+}
+async function addTrip(){
   var name=document.getElementById('trip-new').value.trim();
   var type=document.getElementById('trip-type').value;
   var start=document.getElementById('trip-start').value;
   var end=document.getElementById('trip-end').value;
   if(!name||!start||!end){alert('이름, 시작일, 종료일을 모두 입력해주세요');return;}
   if(end<start)end=start;
-  trips.push({name:name,type:type,start:start,end:end});
-  saveTrips();
+  var typeKor=type==='vacation'?'휴가':'출장';
+  var opt={name:name,type:type,start:start,end:end};
+  trips.push(opt);
   document.getElementById('trip-new').value='';
   document.getElementById('trip-start').value='';
   document.getElementById('trip-end').value='';
   renderTrips();renderCal();
+  await withSync(async function(){
+    var id=await createPage(DB.trips,{
+      '이름':pTitle(name),
+      '종류':pSelect(typeKor),
+      '기간':{date:{start:start,end:end}}
+    });
+    opt.id=id;
+  });
 }
-function delTrip(i){trips.splice(i,1);saveTrips();renderTrips();renderCal();}
+async function delTrip(i){
+  var t=trips[i];
+  trips.splice(i,1);
+  renderTrips();renderCal();
+  if(t&&t.id){
+    await withSync(async function(){await deletePage(t.id);});
+  }
+}
 
 /* ============================================================
    INLINE EDIT FUNCTIONS (더블클릭 편집)
@@ -1080,11 +1251,24 @@ function startEditMonthly(i,spanEl){
 ============================================================ */
 function exportICS(){
   var lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Goal Dashboard//KR','CALSCALE:GREGORIAN'];
+  /* 반복 → ICS RRULE 매핑 */
+  var DOW_ICS=['SU','MO','TU','WE','TH','FR','SA'];
+  function repToRRule(rep){
+    if(!rep)return null;
+    if(rep==='매월')return 'RRULE:FREQ=MONTHLY';
+    var dow=REPEAT_DOW[rep];if(dow===undefined)return null;
+    if(rep.indexOf('매주')===0)return 'RRULE:FREQ=WEEKLY;BYDAY='+DOW_ICS[dow];
+    if(rep.indexOf('격주')===0)return 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY='+DOW_ICS[dow];
+    return null;
+  }
   Object.keys(cache.daily).forEach(function(ds){
     (cache.daily[ds]||[]).forEach(function(t){
       if(!t.isMeeting&&t.tag!=='미팅')return;
       var dt=ds.replace(/-/g,'');
-      lines.push('BEGIN:VEVENT','UID:mtg-'+t.id+'@dashboard','DTSTART;VALUE=DATE:'+dt,'DTEND;VALUE=DATE:'+dt,'SUMMARY:📅 '+t.text+(t.meetingTime?' ('+t.meetingTime+')':''),'END:VEVENT');
+      var ev=['BEGIN:VEVENT','UID:mtg-'+t.id+'@dashboard','DTSTART;VALUE=DATE:'+dt,'DTEND;VALUE=DATE:'+dt,'SUMMARY:📅 '+t.text+(t.meetingTime?' ('+t.meetingTime+')':'')];
+      var rr=repToRRule(t.repeat);if(rr)ev.push(rr);
+      ev.push('END:VEVENT');
+      lines.push.apply(lines,ev);
     });
   });
   trips.forEach(function(tr,i){
