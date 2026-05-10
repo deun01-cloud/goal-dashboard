@@ -140,6 +140,26 @@
   .ics-btn:hover{background:var(--bg2);}
   .inline-edit{flex:1;border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:3px 8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;min-width:0;}
   .edit-hint{font-size:10px;color:var(--text3);padding:0 0 6px;text-align:right;}
+  /* ===== 노트 사이드 패널 ===== */
+  .note-icon{font-size:13px;cursor:pointer;padding:2px 4px;border-radius:4px;flex-shrink:0;opacity:.55;transition:opacity .15s, background .15s;}
+  .note-icon:hover{opacity:1;background:var(--bg2);}
+  .note-icon.has-note{opacity:1;color:var(--purple);}
+  .note-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.32);z-index:998;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .note-overlay.open{opacity:1;pointer-events:auto;}
+  .note-panel{position:fixed;top:0;right:0;height:100vh;width:min(440px,92vw);background:var(--bg);box-shadow:-8px 0 32px rgba(0,0,0,0.18);z-index:999;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+  .note-panel.open{transform:translateX(0);}
+  .note-panel-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .note-panel-title{flex:1;font-size:15px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .note-panel-meta{font-size:11px;color:var(--text3);margin-top:2px;font-weight:400;}
+  .note-panel-close{background:transparent;border:none;font-size:22px;color:var(--text2);cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;}
+  .note-panel-close:hover{background:var(--bg2);color:var(--text);}
+  .note-panel-body{flex:1;padding:14px 18px;overflow-y:auto;display:flex;flex-direction:column;}
+  .note-panel-textarea{flex:1;width:100%;min-height:300px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:12px;font-size:14px;line-height:1.6;font-family:inherit;color:var(--text);background:var(--bg);outline:none;resize:none;}
+  .note-panel-textarea:focus{border-color:var(--purple);}
+  .note-panel-footer{padding:10px 18px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+  .note-save-status{flex:1;}
+  .note-save-status.saved{color:var(--teal);}
+  .note-save-status.saving{color:var(--purple);}
   .trip-edit-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:4px;}
   .trip-edit-row input[type="date"],.trip-edit-row input[type="text"],.trip-edit-row select{border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;}
   .trip-edit-row input[type="text"]{flex:1;min-width:80px;}
@@ -312,6 +332,11 @@
     </div>
     <!-- 주차 선택 탭 (최근 8주) -->
     <div class="week-sel" id="week-sel-btns" style="margin-bottom:10px;"></div>
+    <div id="weekly-carry-notice" style="display:none;" class="carry-notice">
+      <span>⏰</span><span id="weekly-carry-text" style="flex:1;"></span>
+      <button class="btn btn-primary" style="padding:3px 10px;font-size:12px;" onclick="applyWeeklyCarryOver()">가져오기</button>
+      <button class="btn" style="padding:3px 10px;font-size:12px;" onclick="dismissWeeklyCarryOver()">닫기</button>
+    </div>
     <div class="stats-row">
       <div class="stat"><div class="stat-frac" id="wd-total"><span class="done-n">0</span></div><div class="stat-label">전체</div></div>
       <div class="stat"><div class="stat-frac teal" id="wd-done-frac"><span class="done-n">0</span><span class="sep">/</span><span class="total-n">0</span></div><div class="stat-label">완료</div></div>
@@ -326,6 +351,10 @@
         <select id="weekly-pri"><option value="높음">높음</option><option value="보통">보통</option><option value="낮음">낮음</option></select>
         <button class="btn btn-primary" onclick="addWeeklyTask()">추가</button>
       </div>
+      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text2);">이전 주 미완료 업무를 이번 주로 가져오기:</span>
+        <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="manualWeeklyCarryOver()">⏪ 이전 주 미완료 가져오기</button>
+      </div>
     </div>
 
     <!-- ===== 월간 업무 ===== -->
@@ -334,6 +363,11 @@
     </div>
     <!-- 월 선택 탭 -->
     <div class="month-sel" id="mcl-month-sel" style="margin-bottom:10px;"></div>
+    <div id="monthly-carry-notice" style="display:none;" class="carry-notice">
+      <span>⏰</span><span id="monthly-carry-text" style="flex:1;"></span>
+      <button class="btn btn-primary" style="padding:3px 10px;font-size:12px;" onclick="applyMonthlyCarryOver()">가져오기</button>
+      <button class="btn" style="padding:3px 10px;font-size:12px;" onclick="dismissMonthlyCarryOver()">닫기</button>
+    </div>
     <div class="stats-row">
       <div class="stat"><div class="stat-frac" id="md-total"><span class="done-n">0</span></div><div class="stat-label">전체</div></div>
       <div class="stat"><div class="stat-frac teal" id="md-done-frac"><span class="done-n">0</span><span class="sep">/</span><span class="total-n">0</span></div><div class="stat-label">완료</div></div>
@@ -347,6 +381,10 @@
         <select id="mcl-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="미팅">미팅</option><option value="학습">학습</option></select>
         <select id="mcl-pri"><option value="높음">높음</option><option value="보통">보통</option><option value="낮음">낮음</option></select>
         <button class="btn btn-primary" onclick="addMonthlyTask()">추가</button>
+      </div>
+      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text2);">이전 달 미완료 업무를 이번 달로 가져오기:</span>
+        <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="manualMonthlyCarryOver()">⏪ 이전 달 미완료 가져오기</button>
       </div>
     </div>
   </div>
@@ -381,6 +419,25 @@
   <div id="dd-done-frac"></div>
   <div id="dd-left"></div>
   <div id="dd-pct"></div>
+</div>
+
+<!-- 노트 사이드 패널 -->
+<div id="note-overlay" class="note-overlay" onclick="closeNotePanel()"></div>
+<div id="note-panel" class="note-panel" role="dialog" aria-label="업무 노트">
+  <div class="note-panel-header">
+    <div style="flex:1;min-width:0;">
+      <div id="note-panel-title" class="note-panel-title">업무 제목</div>
+      <div id="note-panel-meta" class="note-panel-meta"></div>
+    </div>
+    <button class="note-panel-close" onclick="closeNotePanel()" title="닫기 (ESC)">×</button>
+  </div>
+  <div class="note-panel-body">
+    <textarea id="note-panel-textarea" class="note-panel-textarea" oninput="_onNoteInput()" placeholder="이 업무에 대한 세부내용을 적어보세요...&#10;&#10;예) 진행 상황, 참고 자료 링크, 담당자 연락처, 회의 내용 등"></textarea>
+  </div>
+  <div class="note-panel-footer">
+    <span id="note-save-status" class="note-save-status">자동 저장됨</span>
+    <span style="font-size:11px;color:var(--text3);">ESC로 닫기 · Ctrl+Enter 저장</span>
+  </div>
 </div>
 
 <script>
@@ -539,6 +596,8 @@ var selMonthly=TODAY.getMonth();
 var _weekKeyList=[];
 var selWeekKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
 var carryPending=[];
+var weeklyCarryPending=[];
+var monthlyCarryPending=[];
 var _dDrag=null,_wDrag=null,_mDrag=null;
 
 /* ============================================================
@@ -555,19 +614,19 @@ async function loadAll(){
       var isMtg=rSelect(pr,'태그')==='미팅';
       /* 미팅 시간: datetime에서 추출 우선, 없으면 메모에서 */
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||''});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||''});
     });
     cache.weekly={};
     wR.forEach(function(p){
       var pr=p.properties,ym=rText(pr,'연월'),wk=rSelect(pr,'주차');if(!ym||!wk)return;
       var key=ym+' '+wk;if(!cache.weekly[key])cache.weekly[key]=[];
-      cache.weekly[key].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통'});
+      cache.weekly[key].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
     cache.monthly={};
     mR.forEach(function(p){
       var pr=p.properties,m=rSelect(pr,'월'),idx=MONTHS.indexOf(m);if(idx<0)return;
       if(!cache.monthly[idx])cache.monthly[idx]=[];
-      cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통'});
+      cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
     trips=tR.map(function(p){
@@ -580,6 +639,8 @@ async function loadAll(){
     await migrateLocalTrips();
     setSync('ok','노션 연동 완료 ✓  ('+new Date().toLocaleTimeString()+')');
     checkCarryOver();
+    checkWeeklyCarryOver();
+    checkMonthlyCarryOver();
     renderAll();
   }catch(e){setSync('error','연동 오류: '+e.message);console.error(e);}
 }
@@ -641,6 +702,242 @@ function dismissCarryOver(){
   localStorage.setItem('carry_dismissed_'+todayStr(),'1');
   carryPending=[];
 }
+
+/* ============================================================
+   WEEKLY CARRY-OVER
+============================================================ */
+function prevWeekKey(wk){
+  /* _weekKeyList에 있으면 그 직전 키 우선 사용 (정확) */
+  if(_weekKeyList&&_weekKeyList.length){
+    var idx=_weekKeyList.indexOf(wk);
+    if(idx>0)return _weekKeyList[idx-1];
+  }
+  /* fallback: 날짜 계산 */
+  var parts=wk.split(' ');if(parts.length<3)return null;
+  var ymPart=parts[0]+' '+parts[1],wkPart=parts[2];
+  var ym=ymPart.match(/(\d+)년\s*(\d+)월/);if(!ym)return null;
+  var y=parseInt(ym[1]),m=parseInt(ym[2])-1;
+  var w=parseInt(wkPart);if(isNaN(w))return null;
+  var first=new Date(y,m,1);
+  var weekStart=new Date(y,m,1+(w-1)*7-first.getDay());
+  weekStart.setDate(weekStart.getDate()-7);
+  var ds=fmt(weekStart);
+  return getYM(ds)+' '+getWeekNum(ds)+'주';
+}
+function checkWeeklyCarryOver(){
+  var curKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
+  if(selWeekKey!==curKey){document.getElementById('weekly-carry-notice').style.display='none';return;}
+  if(localStorage.getItem('weekly_carry_dismissed_'+curKey)){document.getElementById('weekly-carry-notice').style.display='none';return;}
+  var prev=prevWeekKey(curKey);if(!prev){document.getElementById('weekly-carry-notice').style.display='none';return;}
+  var existing=(cache.weekly[curKey]||[]).map(function(x){return x.text;});
+  var pending=(cache.weekly[prev]||[]).filter(function(t){return !t.done&&existing.indexOf(t.text)<0;});
+  if(pending.length>0){
+    weeklyCarryPending=pending.map(function(t){return Object.assign({},t,{_srcKey:prev});});
+    document.getElementById('weekly-carry-text').textContent=prev+' 미완료 업무 '+pending.length+'개 — 이번 주로 가져올까요?';
+    document.getElementById('weekly-carry-notice').style.display='flex';
+  }else{
+    document.getElementById('weekly-carry-notice').style.display='none';
+  }
+}
+async function applyWeeklyCarryOver(){
+  document.getElementById('weekly-carry-notice').style.display='none';
+  var curKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
+  localStorage.setItem('weekly_carry_dismissed_'+curKey,'1');
+  await _bulkAddWeekly(weeklyCarryPending,selWeekKey);
+  weeklyCarryPending=[];
+}
+function dismissWeeklyCarryOver(){
+  document.getElementById('weekly-carry-notice').style.display='none';
+  var curKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
+  localStorage.setItem('weekly_carry_dismissed_'+curKey,'1');
+  weeklyCarryPending=[];
+}
+async function manualWeeklyCarryOver(){
+  /* 선택된 주 기준 이전 주 미완료 가져오기 */
+  var prev=prevWeekKey(selWeekKey);
+  if(!prev){alert('이전 주를 계산할 수 없습니다.');return;}
+  var existing=(cache.weekly[selWeekKey]||[]).map(function(x){return x.text;});
+  var pending=(cache.weekly[prev]||[]).filter(function(t){return !t.done&&existing.indexOf(t.text)<0;});
+  if(pending.length===0){alert(prev+'에 가져올 미완료 업무가 없습니다.');return;}
+  if(!confirm(prev+' 미완료 업무 '+pending.length+'개를 '+selWeekKey+'로 가져올까요?'))return;
+  await _bulkAddWeekly(pending,selWeekKey);
+}
+async function _bulkAddWeekly(items,wk){
+  var parts=wk.split(' '),wkPart=parts[parts.length-1],ymPart=parts.slice(0,-1).join(' ');
+  if(!cache.weekly[wk])cache.weekly[wk]=[];
+  var added=[];
+  for(var i=0;i<items.length;i++){
+    var t=items[i];
+    var opt={id:'temp-'+Date.now()+'-'+i,text:t.text,done:false,tag:t.tag||'업무',pri:t.pri||'보통'};
+    cache.weekly[wk].push(opt);
+    added.push(opt);
+  }
+  renderWeeklyTasks();renderDashboard();
+  for(var j=0;j<added.length;j++){
+    (function(opt){
+      var v=opt.text,tag=opt.tag,pri=opt.pri;
+      withSync(async function(){var id=await createPage(DB.weekly,{'업무':pTitle(v),'연월':pText(ymPart),'주차':pSelect(wkPart),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});opt.id=id;});
+    })(added[j]);
+  }
+}
+
+/* ============================================================
+   MONTHLY CARRY-OVER
+============================================================ */
+function checkMonthlyCarryOver(){
+  var curM=TODAY.getMonth();
+  if(selMonthly!==curM){document.getElementById('monthly-carry-notice').style.display='none';return;}
+  var curYM=TODAY.getFullYear()+'-'+(curM+1);
+  if(localStorage.getItem('monthly_carry_dismissed_'+curYM)){document.getElementById('monthly-carry-notice').style.display='none';return;}
+  var prevM=(curM-1+12)%12;
+  var existing=(cache.monthly[curM]||[]).map(function(x){return x.text;});
+  var pending=(cache.monthly[prevM]||[]).filter(function(t){return !t.done&&existing.indexOf(t.text)<0;});
+  if(pending.length>0){
+    monthlyCarryPending=pending.slice();
+    document.getElementById('monthly-carry-text').textContent=MONTHS[prevM]+' 미완료 업무 '+pending.length+'개 — 이번 달로 가져올까요?';
+    document.getElementById('monthly-carry-notice').style.display='flex';
+  }else{
+    document.getElementById('monthly-carry-notice').style.display='none';
+  }
+}
+async function applyMonthlyCarryOver(){
+  document.getElementById('monthly-carry-notice').style.display='none';
+  var curM=TODAY.getMonth();
+  var curYM=TODAY.getFullYear()+'-'+(curM+1);
+  localStorage.setItem('monthly_carry_dismissed_'+curYM,'1');
+  await _bulkAddMonthly(monthlyCarryPending,selMonthly);
+  monthlyCarryPending=[];
+}
+function dismissMonthlyCarryOver(){
+  document.getElementById('monthly-carry-notice').style.display='none';
+  var curM=TODAY.getMonth();
+  var curYM=TODAY.getFullYear()+'-'+(curM+1);
+  localStorage.setItem('monthly_carry_dismissed_'+curYM,'1');
+  monthlyCarryPending=[];
+}
+async function manualMonthlyCarryOver(){
+  var prevM=(selMonthly-1+12)%12;
+  var existing=(cache.monthly[selMonthly]||[]).map(function(x){return x.text;});
+  var pending=(cache.monthly[prevM]||[]).filter(function(t){return !t.done&&existing.indexOf(t.text)<0;});
+  if(pending.length===0){alert(MONTHS[prevM]+'에 가져올 미완료 업무가 없습니다.');return;}
+  if(!confirm(MONTHS[prevM]+' 미완료 업무 '+pending.length+'개를 '+MONTHS[selMonthly]+'로 가져올까요?'))return;
+  await _bulkAddMonthly(pending,selMonthly);
+}
+async function _bulkAddMonthly(items,mIdx){
+  var mName=MONTHS[mIdx];
+  if(!cache.monthly[mIdx])cache.monthly[mIdx]=[];
+  var added=[];
+  for(var i=0;i<items.length;i++){
+    var t=items[i];
+    var opt={id:'temp-'+Date.now()+'-'+i,text:t.text,done:false,tag:t.tag||'업무',pri:t.pri||'보통'};
+    cache.monthly[mIdx].push(opt);
+    added.push(opt);
+  }
+  renderMonthlyTasks();renderDashboard();
+  for(var j=0;j<added.length;j++){
+    (function(opt){
+      var v=opt.text,tag=opt.tag,pri=opt.pri;
+      withSync(async function(){var id=await createPage(DB.monthly,{'업무':pTitle(v),'월':pSelect(mName),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});opt.id=id;});
+    })(added[j]);
+  }
+}
+
+/* ============================================================
+   NOTE SIDE PANEL (일/주/월간 통합)
+============================================================ */
+var _noteCtx=null;     /* {kind:'daily'|'weekly'|'monthly', taskId:'...'} */
+var _noteSaveTimer=null;
+var _noteLastSaved='';
+
+function _findTaskById(kind,id){
+  if(kind==='daily'){
+    var arr=cache.daily[selDailyDate]||[];
+    return arr.find(function(x){return x.id===id;});
+  }else if(kind==='weekly'){
+    var arr=cache.weekly[selWeekKey]||[];
+    return arr.find(function(x){return x.id===id;});
+  }else if(kind==='monthly'){
+    var arr=cache.monthly[selMonthly]||[];
+    return arr.find(function(x){return x.id===id;});
+  }
+  return null;
+}
+function openNotePanel(kind,idx){
+  var task;
+  if(kind==='daily'){
+    var s=(cache.daily[selDailyDate]||[]).slice().sort(priSort);task=s[idx];
+  }else if(kind==='weekly'){
+    var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);task=s[idx];
+  }else if(kind==='monthly'){
+    var s=(cache.monthly[selMonthly]||[]).slice().sort(priSort);task=s[idx];
+  }
+  if(!task)return;
+  _noteCtx={kind:kind,taskId:task.id};
+  _noteLastSaved=task.note||'';
+  document.getElementById('note-panel-title').textContent=task.text;
+  var metaTxt='';
+  if(kind==='daily')metaTxt='📅 일간 · '+selDailyDate+' · '+task.tag+' · '+task.pri;
+  else if(kind==='weekly')metaTxt='📋 주간 · '+selWeekKey+' · '+task.tag+' · '+task.pri;
+  else if(kind==='monthly')metaTxt='🗓 월간 · '+MONTHS[selMonthly]+' · '+task.tag+' · '+task.pri;
+  document.getElementById('note-panel-meta').textContent=metaTxt;
+  var ta=document.getElementById('note-panel-textarea');
+  ta.value=task.note||'';
+  document.getElementById('note-save-status').textContent=task.note?'자동 저장됨':'';
+  document.getElementById('note-save-status').className='note-save-status';
+  document.getElementById('note-overlay').classList.add('open');
+  document.getElementById('note-panel').classList.add('open');
+  setTimeout(function(){ta.focus();},200);
+}
+function closeNotePanel(){
+  /* 닫기 전에 미저장 내용이 있으면 즉시 저장 */
+  if(_noteSaveTimer){clearTimeout(_noteSaveTimer);_noteSaveTimer=null;_saveNoteNow();}
+  document.getElementById('note-overlay').classList.remove('open');
+  document.getElementById('note-panel').classList.remove('open');
+  _noteCtx=null;
+}
+function _onNoteInput(){
+  if(!_noteCtx)return;
+  var status=document.getElementById('note-save-status');
+  status.textContent='입력 중...';
+  status.className='note-save-status';
+  if(_noteSaveTimer)clearTimeout(_noteSaveTimer);
+  _noteSaveTimer=setTimeout(_saveNoteNow,800);
+}
+function _saveNoteNow(){
+  if(!_noteCtx)return;
+  var ta=document.getElementById('note-panel-textarea');
+  var val=ta.value;
+  if(val===_noteLastSaved)return;
+  var task=_findTaskById(_noteCtx.kind,_noteCtx.taskId);
+  if(!task)return;
+  task.note=val;
+  _noteLastSaved=val;
+  /* 렌더 갱신 (📝 아이콘 색 반영) */
+  if(_noteCtx.kind==='daily')renderDailyTasks();
+  else if(_noteCtx.kind==='weekly')renderWeeklyTasks();
+  else if(_noteCtx.kind==='monthly')renderMonthlyTasks();
+  /* 노션 동기화 */
+  var status=document.getElementById('note-save-status');
+  status.textContent='저장 중...';
+  status.className='note-save-status saving';
+  withSync(async function(){
+    try{
+      await updatePage(task.id,{'노트':pText(val)});
+      status.textContent='✓ 저장됨';
+      status.className='note-save-status saved';
+    }catch(e){
+      console.warn('노트 저장 실패 (노션 DB에 \'노트\' 텍스트 컬럼이 없을 수 있습니다):',e);
+      status.textContent='⚠ 노션 동기화 실패 (로컬에는 저장됨)';
+      status.className='note-save-status';
+    }
+  });
+}
+/* 키 단축: ESC 닫기, Ctrl+Enter 즉시 저장 */
+document.addEventListener('keydown',function(e){
+  if(!_noteCtx)return;
+  if(e.key==='Escape'){e.preventDefault();closeNotePanel();}
+  else if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();if(_noteSaveTimer){clearTimeout(_noteSaveTimer);_noteSaveTimer=null;}_saveNoteNow();}
+});
 
 /* ============================================================
    RENDER ALL
@@ -946,6 +1243,7 @@ function renderDailyTasks(){
       +repBadge
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleDailyPri('+i+')" title="클릭하여 우선순위 변경">'+t.pri+'</span>'
+      +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'daily\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
       +'<button class="del-btn" onclick="delDailyByIdx('+i+')">&#10005;</button></div>';
   });
   /* 반복 가상 항목 표시 (체크/삭제/편집 불가, 원본으로 이동만 가능) */
@@ -1060,13 +1358,14 @@ function renderWeeklyTasks(){
       +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditWeekly('+i+',this)">'+escHtml(t.text)+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleWeeklyPri('+i+')" title="클릭하여 변경">'+t.pri+'</span>'
+      +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'weekly\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
       +'<button class="del-btn" onclick="delWeeklyByIdx('+i+')">&#10005;</button></div>';
   });
   document.getElementById('weekly-list').innerHTML=html;
 }
 function _dropWeekly(e,i){e.preventDefault();if(_wDrag===null||_wDrag===i)return;var arr=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var m=arr.splice(_wDrag,1)[0];arr.splice(i,0,m);cache.weekly[selWeekKey]=arr;_wDrag=null;renderWeeklyTasks();}
 function cycleWeeklyPri(i){var tasks=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=tasks[i];if(!t)return;var cycle=['높음','보통','낮음'],next=cycle[(cycle.indexOf(t.pri)+1)%3];var orig=(cache.weekly[selWeekKey]||[]).find(function(x){return x.id===t.id;});if(orig){orig.pri=next;renderWeeklyTasks();withSync(function(){return updatePage(orig.id,{'우선순위':pSelect(next)});});}}
-function selWeekByIdx(i){if(_weekKeyList[i])selWeekKey=_weekKeyList[i];renderWeeklyTasks();}
+function selWeekByIdx(i){if(_weekKeyList[i])selWeekKey=_weekKeyList[i];checkWeeklyCarryOver();renderWeeklyTasks();}
 function toggleWeeklyByIdx(i){var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleWeekly(t.id,selWeekKey);}
 function doToggleWeekly(id,wk){var t=(cache.weekly[wk]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderWeeklyTasks();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
 function delWeeklyByIdx(i){var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=s[i];if(!t)return;cache.weekly[selWeekKey]=(cache.weekly[selWeekKey]||[]).filter(function(x){return x.id!==t.id;});renderWeeklyTasks();renderDashboard();withSync(function(){return deletePage(t.id);});}
@@ -1099,13 +1398,14 @@ function renderMonthlyTasks(){
       +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditMonthly('+i+',this)">'+escHtml(t.text)+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleMonthlyPri('+i+')" title="클릭하여 변경">'+t.pri+'</span>'
+      +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'monthly\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
       +'<button class="del-btn" onclick="delMonthlyByIdx('+i+')">&#10005;</button></div>';
   });
   document.getElementById('monthly-list').innerHTML=html;
 }
 function _dropMonthly(e,i){e.preventDefault();if(_mDrag===null||_mDrag===i)return;var arr=(cache.monthly[selMonthly]||[]).slice().sort(priSort);var m=arr.splice(_mDrag,1)[0];arr.splice(i,0,m);cache.monthly[selMonthly]=arr;_mDrag=null;renderMonthlyTasks();}
 function cycleMonthlyPri(i){var tasks=(cache.monthly[selMonthly]||[]).slice().sort(priSort);var t=tasks[i];if(!t)return;var cycle=['높음','보통','낮음'],next=cycle[(cycle.indexOf(t.pri)+1)%3];var orig=(cache.monthly[selMonthly]||[]).find(function(x){return x.id===t.id;});if(orig){orig.pri=next;renderMonthlyTasks();withSync(function(){return updatePage(orig.id,{'우선순위':pSelect(next)});});}}
-function selMonth(i){selMonthly=i;renderMonthlyTasks();}
+function selMonth(i){selMonthly=i;checkMonthlyCarryOver();renderMonthlyTasks();}
 function toggleMonthlyByIdx(i){var s=(cache.monthly[selMonthly]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleMonthly(t.id,selMonthly);}
 function doToggleMonthly(id,m){var t=(cache.monthly[m]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderMonthlyTasks();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
 function delMonthlyByIdx(i){var s=(cache.monthly[selMonthly]||[]).slice().sort(priSort);var t=s[i];if(!t)return;cache.monthly[selMonthly]=(cache.monthly[selMonthly]||[]).filter(function(x){return x.id!==t.id;});renderMonthlyTasks();renderDashboard();withSync(function(){return deletePage(t.id);});}
