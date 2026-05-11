@@ -848,6 +848,7 @@ async function _bulkAddMonthly(items,mIdx){
 var _noteCtx=null;     /* {kind:'daily'|'weekly'|'monthly', taskId:'...'} */
 var _noteSaveTimer=null;
 var _noteLastSaved='';
+var _noteSyncDisabled=false;  /* 노션 동기화 한 번 실패하면 이후 세션에서 자동 비활성화 (다른 동기화 보호) */
 
 function _findTaskById(kind,id){
   if(kind==='daily'){
@@ -910,27 +911,37 @@ function _saveNoteNow(){
   if(val===_noteLastSaved)return;
   var task=_findTaskById(_noteCtx.kind,_noteCtx.taskId);
   if(!task)return;
+  /* 임시 ID(temp-)인 경우 노션 동기화 보류 (업무 자체가 아직 노션에 없음) */
+  if(typeof task.id==='string'&&task.id.indexOf('temp-')===0){
+    task.note=val;
+    _noteLastSaved=val;
+    var status0=document.getElementById('note-save-status');
+    if(status0){status0.textContent='⏳ 업무 동기화 대기 중...';status0.className='note-save-status';}
+    return;
+  }
   task.note=val;
   _noteLastSaved=val;
   /* 렌더 갱신 (📝 아이콘 색 반영) */
   if(_noteCtx.kind==='daily')renderDailyTasks();
   else if(_noteCtx.kind==='weekly')renderWeeklyTasks();
   else if(_noteCtx.kind==='monthly')renderMonthlyTasks();
-  /* 노션 동기화 */
+  /* 노션 동기화 — 완전 격리: withSync 사용 안 함 (메인 동기화 상태에 영향 X) */
   var status=document.getElementById('note-save-status');
-  status.textContent='저장 중...';
-  status.className='note-save-status saving';
-  withSync(async function(){
+  if(_noteSyncDisabled){
+    if(status){status.textContent='💾 로컬에만 저장됨 (노션 \'노트\' 컬럼 없음)';status.className='note-save-status';}
+    return;
+  }
+  if(status){status.textContent='저장 중...';status.className='note-save-status saving';}
+  (async function(){
     try{
       await updatePage(task.id,{'노트':pText(val)});
-      status.textContent='✓ 저장됨';
-      status.className='note-save-status saved';
+      if(status){status.textContent='✓ 저장됨';status.className='note-save-status saved';}
     }catch(e){
-      console.warn('노트 저장 실패 (노션 DB에 \'노트\' 텍스트 컬럼이 없을 수 있습니다):',e);
-      status.textContent='⚠ 노션 동기화 실패 (로컬에는 저장됨)';
-      status.className='note-save-status';
+      console.warn('[노트 동기화 실패] 노션 DB에 \'노트\'라는 텍스트(rich_text) 컬럼을 추가해주세요. 자세한 에러:',e&&e.message);
+      _noteSyncDisabled=true;  /* 이번 세션에서는 더 이상 시도 안 함 */
+      if(status){status.textContent='⚠ 노션에 \'노트\' 컬럼 없음 (로컬에는 저장됨)';status.className='note-save-status';}
     }
-  });
+  })();
 }
 /* 키 단축: ESC 닫기, Ctrl+Enter 즉시 저장 */
 document.addEventListener('keydown',function(e){
