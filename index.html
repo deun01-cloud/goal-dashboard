@@ -412,6 +412,16 @@
   </div>
 </div>
 
+<!-- 진단 패널 (디버그용) -->
+<div id="diag-panel" style="position:fixed;bottom:10px;right:10px;width:380px;max-height:50vh;background:#1a1a1a;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:6px;z-index:9000;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.4);">
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;color:#ff0;">
+    <span style="flex:1;font-weight:bold;">🔍 진단 로그</span>
+    <button onclick="document.getElementById('diag-log').innerHTML='';" style="background:#333;color:#fff;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">지우기</button>
+    <button onclick="document.getElementById('diag-panel').style.display='none';" style="background:#333;color:#fff;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">닫기</button>
+  </div>
+  <div id="diag-log" style="white-space:pre-wrap;word-break:break-all;line-height:1.4;"></div>
+</div>
+
 <!-- 숨김 요소: JS에서 참조하는 ID 유지용 -->
 <div style="display:none;">
   <div id="dash-today"></div>
@@ -504,7 +514,21 @@ async function nFetch(path,method,body){
   if(!res.ok){var err=await res.text();throw new Error(res.status+': '+err);}
   return res.json();
 }
-async function queryDB(dbId,filter){var body={page_size:100};if(filter)body.filter=filter;var data=await nFetch('/databases/'+dbId.replace(/-/g,'')+'/query','POST',body);return data.results||[];}
+async function queryDB(dbId,filter){
+  /* 노션 page_size 최대 100. 100개를 초과하는 DB는 has_more=true가 와서 페이지네이션 필요. */
+  var all=[],cursor=undefined,safety=0;
+  while(safety++<50){  /* 최대 50페이지 = 5000건 안전장치 */
+    var body={page_size:100};
+    if(filter)body.filter=filter;
+    if(cursor)body.start_cursor=cursor;
+    var data=await nFetch('/databases/'+dbId.replace(/-/g,'')+'/query','POST',body);
+    if(data.results&&data.results.length)all=all.concat(data.results);
+    if(!data.has_more)break;
+    cursor=data.next_cursor;
+    if(!cursor)break;
+  }
+  return all;
+}
 async function createPage(dbId,props){var data=await nFetch('/pages','POST',{parent:{database_id:dbId.replace(/-/g,'')},properties:props});return data.id;}
 async function updatePage(pageId,props){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{properties:props});}
 async function deletePage(pageId){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{archived:true});}
@@ -603,31 +627,54 @@ var _dDrag=null,_wDrag=null,_mDrag=null;
 /* ============================================================
    LOAD
 ============================================================ */
+function diag(msg,color){
+  try{
+    var el=document.getElementById('diag-log');if(!el)return;
+    var c=color||'#0f0';
+    var time=new Date().toLocaleTimeString();
+    el.innerHTML='<span style="color:#888;">['+time+']</span> <span style="color:'+c+';">'+String(msg).replace(/</g,'&lt;')+'</span>\n'+el.innerHTML;
+    /* 최대 100줄 */
+    var lines=el.innerHTML.split('\n');if(lines.length>100)el.innerHTML=lines.slice(0,100).join('\n');
+  }catch(e){}
+}
 async function loadAll(){
   setSync('syncing','노션에서 데이터 불러오는 중...');
+  diag('▶ 노션 데이터 로드 시작','#ff0');
   try{
     var[dR,wR,mR,gR,tR]=await Promise.all([queryDB(DB.daily),queryDB(DB.weekly),queryDB(DB.monthly),queryDB(DB.goals),queryDB(DB.trips)]);
+    diag('✓ 노션 응답: 일간='+dR.length+' 주간='+wR.length+' 월간='+mR.length+' 목표='+gR.length+' 휴가='+tR.length);
     cache.daily={};
+    var skipCount=0;
     dR.forEach(function(p){
-      var pr=p.properties,ds=rDate(pr,'날짜');if(!ds)return;
+      var pr=p.properties,ds=rDate(pr,'날짜');
+      if(!ds){skipCount++;return;}
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
-      /* 미팅 시간: datetime에서 추출 우선, 없으면 메모에서 */
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
       cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||''});
     });
+    if(skipCount>0)diag('⚠ 일간 '+skipCount+'개가 날짜 없음으로 건너뜀','#f80');
+    /* 오늘 날짜 일간 업무 갯수 보고 */
+    var today=todayStr();
+    diag('📅 오늘('+today+') 일간 업무: '+((cache.daily[today]||[]).length)+'개','#0ff');
     cache.weekly={};
+    var wSkip=0;
     wR.forEach(function(p){
-      var pr=p.properties,ym=rText(pr,'연월'),wk=rSelect(pr,'주차');if(!ym||!wk)return;
+      var pr=p.properties,ym=rText(pr,'연월'),wk=rSelect(pr,'주차');
+      if(!ym||!wk){wSkip++;return;}
       var key=ym+' '+wk;if(!cache.weekly[key])cache.weekly[key]=[];
       cache.weekly[key].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
+    if(wSkip>0)diag('⚠ 주간 '+wSkip+'개가 연월/주차 없음으로 건너뜀','#f80');
     cache.monthly={};
+    var mSkip=0;
     mR.forEach(function(p){
-      var pr=p.properties,m=rSelect(pr,'월'),idx=MONTHS.indexOf(m);if(idx<0)return;
+      var pr=p.properties,m=rSelect(pr,'월'),idx=MONTHS.indexOf(m);
+      if(idx<0){mSkip++;return;}
       if(!cache.monthly[idx])cache.monthly[idx]=[];
       cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
+    if(mSkip>0)diag('⚠ 월간 '+mSkip+'개가 월 인식 안됨으로 건너뜀','#f80');
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
     trips=tR.map(function(p){
       var pr=p.properties;
@@ -638,11 +685,16 @@ async function loadAll(){
     /* 기존 localStorage 데이터가 남아있으면 1회 마이그레이션 */
     await migrateLocalTrips();
     setSync('ok','노션 연동 완료 ✓  ('+new Date().toLocaleTimeString()+')');
+    diag('✓ 로드 완료','#0f0');
     checkCarryOver();
     checkWeeklyCarryOver();
     checkMonthlyCarryOver();
     renderAll();
-  }catch(e){setSync('error','연동 오류: '+e.message);console.error(e);}
+  }catch(e){
+    setSync('error','연동 오류: '+e.message);
+    diag('❌ 로드 실패: '+e.message,'#f00');
+    console.error(e);
+  }
 }
 
 async function migrateLocalTrips(){
