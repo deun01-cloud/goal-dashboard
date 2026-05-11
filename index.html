@@ -1323,7 +1323,21 @@ async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat){
   }
   if(time)props['메모']=pText(time);
   if(repeat)props['반복']=pSelect(repeat);
-  await withSync(async function(){var id=await createPage(DB.daily,props);opt.id=id;});
+  /* 노션 동기화 — 실패 시 cache 롤백 + 사용자 알림 (화면에만 추가되고 노션에 안 들어가는 문제 방지) */
+  setSync('syncing','저장 중...');
+  try{
+    var id=await createPage(DB.daily,props);
+    opt.id=id;
+    setSync('ok','저장됨 ✓  '+new Date().toLocaleTimeString());
+  }catch(e){
+    /* 롤백: cache에서 해당 항목 제거 */
+    cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x!==opt;});
+    setSync('error','❌ 일간 업무 저장 실패: '+e.message);
+    console.error('일간 업무 저장 실패:',e,'\n전송한 props:',props);
+    alert('일간 업무 저장 실패!\n\n원인: '+e.message+'\n\n자세한 내용은 F12 → Console 확인. 화면에서 해당 업무는 제거됩니다.');
+    renderDailyTasks();renderCal();renderDashboard();
+    throw e;
+  }
 }
 async function addDailyTask(){
   var v=document.getElementById('daily-new').value.trim();if(!v)return;
@@ -1387,7 +1401,18 @@ async function addWeeklyTask(){
   var opt={id:'temp-'+Date.now(),text:v,done:false,tag:tag,pri:pri};
   if(!cache.weekly[wk])cache.weekly[wk]=[];cache.weekly[wk].push(opt);
   document.getElementById('weekly-new').value='';renderWeeklyTasks();renderDashboard();
-  await withSync(async function(){var id=await createPage(DB.weekly,{'업무':pTitle(v),'연월':pText(ymPart),'주차':pSelect(wkPart),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});opt.id=id;});
+  setSync('syncing','저장 중...');
+  try{
+    var id=await createPage(DB.weekly,{'업무':pTitle(v),'연월':pText(ymPart),'주차':pSelect(wkPart),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});
+    opt.id=id;
+    setSync('ok','저장됨 ✓  '+new Date().toLocaleTimeString());
+  }catch(e){
+    cache.weekly[wk]=(cache.weekly[wk]||[]).filter(function(x){return x!==opt;});
+    setSync('error','❌ 주간 업무 저장 실패: '+e.message);
+    console.error('주간 업무 저장 실패:',e);
+    alert('주간 업무 저장 실패!\n\n원인: '+e.message+'\n\n자세한 내용은 F12 → Console 확인.');
+    renderWeeklyTasks();renderDashboard();
+  }
 }
 
 /* ============================================================
@@ -1426,7 +1451,18 @@ async function addMonthlyTask(){
   var opt={id:'temp-'+Date.now(),text:v,done:false,tag:tag,pri:pri};
   if(!cache.monthly[selMonthly])cache.monthly[selMonthly]=[];cache.monthly[selMonthly].push(opt);
   document.getElementById('mcl-new').value='';renderMonthlyTasks();renderDashboard();
-  await withSync(async function(){var id=await createPage(DB.monthly,{'업무':pTitle(v),'월':pSelect(mName),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});opt.id=id;});
+  setSync('syncing','저장 중...');
+  try{
+    var id=await createPage(DB.monthly,{'업무':pTitle(v),'월':pSelect(mName),'태그':pSelect(tag),'우선순위':pSelect(pri),'완료':pCheck(false)});
+    opt.id=id;
+    setSync('ok','저장됨 ✓  '+new Date().toLocaleTimeString());
+  }catch(e){
+    cache.monthly[selMonthly]=(cache.monthly[selMonthly]||[]).filter(function(x){return x!==opt;});
+    setSync('error','❌ 월간 업무 저장 실패: '+e.message);
+    console.error('월간 업무 저장 실패:',e);
+    alert('월간 업무 저장 실패!\n\n원인: '+e.message+'\n\n자세한 내용은 F12 → Console 확인.');
+    renderMonthlyTasks();renderDashboard();
+  }
 }
 
 /* ============================================================
