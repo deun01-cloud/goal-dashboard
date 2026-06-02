@@ -1367,14 +1367,29 @@ function loadMockData(){
   renderAll();
 }
 
+var AUTO_SYNC_MS = 15000;   /* 15초마다 노션에서 최신 데이터 가져오기 */
+var _autoSyncTimer = null;
+
+function startAutoSync(){
+  if(_autoSyncTimer) clearInterval(_autoSyncTimer);
+  _autoSyncTimer = setInterval(function(){
+    /* 입력/편집 중이면 건너뛰기 (작업 덮어쓰기 방지) */
+    if(document.hidden) return;
+    if(document.querySelector('.sheet.show')) return;
+    var ae=document.activeElement;
+    if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')) return;
+    loadAll();
+  }, AUTO_SYNC_MS);
+}
+
 window.addEventListener('load',function(){
-  loadMockData(); /* 임시 데이터로 테스트 */
-  /* loadAll(); */ /* 실제 노션 연동 시 이걸로 교체 */
+  loadAll();        /* 실제 노션 데이터 로드 */
+  startAutoSync();  /* 실시간 자동 동기화 시작 */
 });
 
-// 백그라운드에서 돌아오면 자동 새로고침
+// 백그라운드에서 돌아오면 즉시 노션에서 최신 데이터로 새로고침
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden){loadMockData();}
+  if(!document.hidden){ loadAll(); }
 });
 </script>
 
