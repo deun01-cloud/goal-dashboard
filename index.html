@@ -3786,6 +3786,7 @@ function renderProducts(){
   const totalPages=Math.max(1,Math.ceil(list.length/PD_PAGE_SIZE));
   if(pdPage>totalPages) pdPage=totalPages;
   const pageList=list.slice((pdPage-1)*PD_PAGE_SIZE, pdPage*PD_PAGE_SIZE);
+  window._pdPageList = pageList; // 인덱스로 정확히 참조 (id float 오류 방지)
 
   // ── 목록형 뷰 ──
   const listView = pageList.length ? `
@@ -3831,7 +3832,7 @@ function renderProducts(){
         </tr>
       </thead>
       <tbody>
-        ${pageList.map(p=>{
+        ${pageList.map((p,_i)=>{
           const stock=+p.stock||0;
           const safety=+p.safetyStock||0;
           const isLow=safety>0&&stock<=safety;
@@ -3850,34 +3851,34 @@ function renderProducts(){
           window[_imgsKey] = normImgs;
           const thumbCell=thumbUrl
             ? `<img src="${thumbUrl}" loading="lazy" onclick="event.stopPropagation();openPrevList(window['${_imgsKey}'],0,false)" style="width:38px;height:38px;object-fit:cover;border-radius:5px;border:1px solid var(--bdr);cursor:zoom-in;display:block" title="클릭하면 확대 (${normImgs.length}장)">`
-            : `<div onclick="openProductModal(${p.id})" style="width:38px;height:38px;background:var(--s2);border:1px dashed var(--bdr);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--t3);cursor:pointer" title="사진 없음 — 클릭해서 추가">📷</div>`;
+            : `<div onclick="openProductModalByIdx(${_i})" style="width:38px;height:38px;background:var(--s2);border:1px dashed var(--bdr);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--t3);cursor:pointer" title="사진 없음 — 클릭해서 추가">📷</div>`;
           return `
         <tr style="border-bottom:1px solid var(--bdr);cursor:pointer" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
           <td style="padding:7px 10px" onclick="event.stopPropagation()">
             <input type="checkbox" class="pd-chk" value="${p.id}" onchange="pdUpdateBulkBar()">
           </td>
           <td style="padding:5px 6px" onclick="event.stopPropagation()">${thumbCell}</td>
-          <td style="padding:7px 10px;font-family:monospace;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModal(${p.id})">${p.code||'—'}</td>
-          <td style="padding:7px 10px;font-weight:600;color:var(--t1)" onclick="openProductModal(${p.id})">${p.name}</td>
-          <td style="padding:7px 10px;text-align:center" onclick="openProductModal(${p.id})">
+          <td style="padding:7px 10px;font-family:monospace;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModalByIdx(${_i})">${p.code||'—'}</td>
+          <td style="padding:7px 10px;font-weight:600;color:var(--t1)" onclick="openProductModalByIdx(${_i})">${p.name}</td>
+          <td style="padding:7px 10px;text-align:center" onclick="openProductModalByIdx(${_i})">
             <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--s2);border:1px solid var(--bdr);white-space:nowrap">${p.type||'기타'}</span>
           </td>
-          <td style="padding:7px 10px;font-size:11.5px;color:var(--t2);white-space:nowrap" onclick="openProductModal(${p.id})">${p.mat||'—'}</td>
-          <td style="padding:7px 10px" onclick="openProductModal(${p.id})">
+          <td style="padding:7px 10px;font-size:11.5px;color:var(--t2);white-space:nowrap" onclick="openProductModalByIdx(${_i})">${p.mat||'—'}</td>
+          <td style="padding:7px 10px" onclick="openProductModalByIdx(${_i})">
             ${p.plating?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--gold-bg);border:1px solid var(--gold-line);color:var(--gold-lt)">${p.plating}</span>`:'—'}
           </td>
           <td style="padding:7px 10px;text-align:center;white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:inline-flex;align-items:center;gap:3px">
-              <button onclick="quickStockChange(${p.id},-1)" title="−1" style="width:22px;height:22px;border:1px solid var(--bdr);border-radius:4px;background:var(--s1);color:var(--t2);cursor:pointer;font-size:12px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">−</button>
-              <span style="display:inline-block;min-width:36px;padding:3px 8px;font-size:12px;font-weight:700;background:${stkBg};color:${stkColor};border-radius:4px;text-align:center;cursor:pointer" onclick="openStockModal(${p.id})" title="재고 조정/이력">${stock.toLocaleString()}${safety>0?`<span style="font-size:9px;color:var(--t3);font-weight:500">/${safety}</span>`:''}</span>
-              <button onclick="quickStockChange(${p.id},+1)" title="+1" style="width:22px;height:22px;border:1px solid var(--bdr);border-radius:4px;background:var(--s1);color:var(--t2);cursor:pointer;font-size:12px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">＋</button>
+              <button onclick="quickStockChangeByIdx(${_i},-1)" title="−1" style="width:22px;height:22px;border:1px solid var(--bdr);border-radius:4px;background:var(--s1);color:var(--t2);cursor:pointer;font-size:12px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">−</button>
+              <span style="display:inline-block;min-width:36px;padding:3px 8px;font-size:12px;font-weight:700;background:${stkBg};color:${stkColor};border-radius:4px;text-align:center;cursor:pointer" onclick="openStockModalByIdx(${_i})" title="재고 조정/이력">${stock.toLocaleString()}${safety>0?`<span style="font-size:9px;color:var(--t3);font-weight:500">/${safety}</span>`:''}</span>
+              <button onclick="quickStockChangeByIdx(${_i},+1)" title="+1" style="width:22px;height:22px;border:1px solid var(--bdr);border-radius:4px;background:var(--s1);color:var(--t2);cursor:pointer;font-size:12px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">＋</button>
             </div>
           </td>
-          <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gold-lt);white-space:nowrap" onclick="openProductModal(${p.id})">${p.price?p.price.toLocaleString()+'원':'—'}</td>
-          <td style="padding:7px 10px;text-align:right;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModal(${p.id})">${p.costPrice?p.costPrice.toLocaleString()+'원':'—'}</td>
-          <td style="padding:7px 10px;text-align:center;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModal(${p.id})">${p.lastModified||'—'}</td>
+          <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gold-lt);white-space:nowrap" onclick="openProductModalByIdx(${_i})">${p.price?p.price.toLocaleString()+'원':'—'}</td>
+          <td style="padding:7px 10px;text-align:right;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModalByIdx(${_i})">${p.costPrice?p.costPrice.toLocaleString()+'원':'—'}</td>
+          <td style="padding:7px 10px;text-align:center;font-size:11px;color:var(--t3);white-space:nowrap" onclick="openProductModalByIdx(${_i})">${p.lastModified||'—'}</td>
           <td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">
-            <button onclick="pdDeleteOne(${p.id})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--t3)'" title="삭제">🗑</button>
+            <button onclick="pdDeleteOneByIdx(${_i})" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--t3)'" title="삭제">🗑</button>
           </td>
         </tr>`;
         }).join('')}
@@ -3925,7 +3926,7 @@ function renderProducts(){
 
 // ── 제품DB 삭제 함수들 ──
 function pdDeleteOne(id){
-  const p=productDB.find(x=>x.id==id);
+  const p=(id && typeof id==='object') ? id : productDB.find(x=>x.id==id);
   showConfirm(`"${p?.name||'제품'}"을 삭제합니다.`,()=>{
     if(p) deleteProductFromNotion(p);
     productDB=productDB.filter(x=>x.id!=id);
@@ -4059,8 +4060,14 @@ function _getPdType(){
   if(sel && sel.value==='__custom__') return (inp && inp.value.trim()) || '';
   return sel ? sel.value : '';
 }
+// 인덱스로 정확히 참조 (id float 변환 오류 방지) — 제품DB 목록 행
+function openProductModalByIdx(idx){ const p=(window._pdPageList||[])[idx]; if(!p){ showToast('⚠ 제품을 찾을 수 없습니다','var(--red)'); return; } openProductModal(p); }
+function quickStockChangeByIdx(idx, delta){ const p=(window._pdPageList||[])[idx]; if(!p) return; quickStockChange(p, delta); }
+function openStockModalByIdx(idx){ const p=(window._pdPageList||[])[idx]; if(!p) return; openStockModal(p); }
+function pdDeleteOneByIdx(idx){ const p=(window._pdPageList||[])[idx]; if(!p) return; pdDeleteOne(p); }
+
 function openProductModal(idOrNull){
-  const p=idOrNull?productDB.find(x=>x.id==idOrNull):null;
+  const p=(idOrNull && typeof idOrNull==='object') ? idOrNull : (idOrNull?productDB.find(x=>x.id==idOrNull):null);
   pdImgBuf=p?[...(p.imgs||[])]:[];
   sv('pd_id',p?p.id:'');sv('pd_code',p?p.code:'');sv('pd_name',p?p.name:'');
   // 유형: 기존 제품에 유형이 있으면 그대로, 비어있으면 품번 3번째 글자로 자동 추론
@@ -14012,7 +14019,7 @@ function getStockHistory(productId, limit){
 
 // 빠른 재고 변경 (+1/-1)
 function quickStockChange(productId, delta){
-  const p=productDB.find(x=>x.id==productId);
+  const p=(productId && typeof productId==='object') ? productId : productDB.find(x=>x.id==productId);
   if(!p) return;
   const newStock=(+p.stock||0)+delta;
   if(newStock<0){showToast('⚠ 재고가 부족합니다','var(--red)');return}
@@ -14034,7 +14041,7 @@ function quickStockChange(productId, delta){
 // 재고 조정 모달 열기 (현재 재고 + 안전재고 + 변동 + 이력)
 let _stockModalProdId=null;
 function openStockModal(productId){
-  const p=productDB.find(x=>x.id==productId);
+  const p=(productId && typeof productId==='object') ? productId : productDB.find(x=>x.id==productId);
   if(!p) return;
   _stockModalProdId=productId;
   const stock=+p.stock||0;
