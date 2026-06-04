@@ -9452,15 +9452,33 @@ function _renderIoGeneral(){
   }
   list.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
-  // 고객사 이니셜 그룹화
+  // 고객사 이니셜 그룹화 — 현재 선택된 구분(입고/출고/수리) 필터를 반영해야
+  // 배지 숫자와 실제 목록이 일치한다 (검색어는 제외하고 구분 필터만 적용)
+  const vendorBase = (_ioFilter !== 'all') ? allItems.filter(io => io.kind === _ioFilter) : allItems;
   const vendorGroups = {};
-  allItems.forEach(io=>{
+  vendorBase.forEach(io=>{
     const init = _ioInitial(io.vendor);
     if(!init) return;
     if(!vendorGroups[init]) vendorGroups[init] = {count:0, names:new Set()};
     vendorGroups[init].count++;
     vendorGroups[init].names.add(io.vendor);
   });
+  // 현재 구분 필터에서 선택된 고객사가 0건이면 고객사 필터 자동 해제 (빈 화면 방지)
+  if(_ioVendorFilter !== 'all' && !vendorGroups[_ioVendorFilter]){
+    _ioVendorFilter = 'all';
+    list = allItems.slice();
+    if(_ioFilter !== 'all') list = list.filter(io => io.kind === _ioFilter);
+    if(q){
+      list = list.filter(io =>
+        (io.title||'').toLowerCase().includes(q) ||
+        (io.vendor||'').toLowerCase().includes(q) ||
+        (io.items||'').toLowerCase().includes(q) ||
+        (io.invoice||'').toLowerCase().includes(q) ||
+        (io.memo||'').toLowerCase().includes(q)
+      );
+    }
+    list.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  }
   const sortedVendors = Object.entries(vendorGroups).sort((a,b)=>b[1].count-a[1].count).slice(0,20);
 
   sub.innerHTML = `
@@ -21708,8 +21726,9 @@ function _renderSmProductPickerList(){
       return;
     }
     const shown = pdList.slice(0, 50);
+    window._smPickPdShown = shown; // 인덱스 참조 (id float 오류 방지)
     const total = pdList.length;
-    el.innerHTML = shown.map(p=>{
+    el.innerHTML = shown.map((p,_i)=>{
       const wt = p.weight || 0;
       const cn = p.costPrice || 0;
       const pr = p.price || 0;
@@ -21719,7 +21738,7 @@ function _renderSmProductPickerList(){
       const thumb = (Array.isArray(p.imgs) && p.imgs[0]?.url)
         ? `<img src="${p.imgs[0].url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--bdr);flex-shrink:0">`
         : `<div style="width:36px;height:36px;background:var(--s2);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:14px;flex-shrink:0">📦</div>`;
-      return `<div onclick="pickSmProduct('pd',${p.id})" style="padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='transparent'">
+      return `<div onclick="pickSmProductByIdx('pd',${_i})" style="padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='transparent'">
         ${thumb}
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--t1)">
@@ -21751,15 +21770,16 @@ function _renderSmProductPickerList(){
       return;
     }
     const shown = smpList.slice(0, 50);
+    window._smPickSmpShown = shown; // 인덱스 참조 (id float 오류 방지)
     const total = smpList.length;
-    el.innerHTML = shown.map(s=>{
+    el.innerHTML = shown.map((s,_i)=>{
       const thumb = (Array.isArray(s.imgs) && s.imgs[0]?.url)
         ? `<img src="${s.imgs[0].url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--bdr);flex-shrink:0">`
         : `<div style="width:36px;height:36px;background:var(--s2);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:14px;flex-shrink:0">🔬</div>`;
       const platBadge = s.plating ? `<span style="background:var(--gold-bg);color:var(--gold-lt);padding:2px 6px;border-radius:3px;font-size:10px;margin-left:4px">${s.plating}</span>` : '';
       const matBadge = s.mat ? `<span style="background:rgba(60,108,170,.08);color:var(--blu);padding:2px 6px;border-radius:3px;font-size:10px;margin-left:4px">${s.mat}</span>` : '';
       const statusBadge = `<span style="background:var(--s2);color:var(--t2);padding:2px 6px;border-radius:3px;font-size:10px;margin-left:4px">${s.status||'의뢰'}</span>`;
-      return `<div onclick="pickSmProduct('smp',${s.id})" style="padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='transparent'">
+      return `<div onclick="pickSmProductByIdx('smp',${_i})" style="padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='transparent'">
         ${thumb}
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--t1)">
@@ -21777,6 +21797,13 @@ function _renderSmProductPickerList(){
 }
 
 // 검색 결과에서 클릭 — 행에 채우기
+// 인덱스로 정확히 참조 (id float 변환 오류 방지)
+function pickSmProductByIdx(kind, idx){
+  const obj = kind==='pd' ? (window._smPickPdShown||[])[idx] : (window._smPickSmpShown||[])[idx];
+  if(!obj){ showToast('⚠ 항목을 찾을 수 없습니다','var(--red)'); return; }
+  pickSmProduct(kind, obj);
+}
+
 function pickSmProduct(kind, id){
   const rowIdx = _smPickRowIdx;
   const row = _smRowsBuf[rowIdx];
@@ -21786,7 +21813,7 @@ function pickSmProduct(kind, id){
   }
 
   if(kind === 'pd'){
-    const p = productDB.find(x => String(x.id) === String(id));
+    const p = (id && typeof id==='object') ? id : productDB.find(x => String(x.id) === String(id));
     if(!p) return;
     // 제품DB → 행 채우기
     row.name = p.name || '';
@@ -21809,7 +21836,7 @@ function pickSmProduct(kind, id){
     }
     showToast(`✓ "${p.code||p.name}" 정보로 행 ${rowIdx+1} 채움`,'var(--grn)', 3000);
   } else if(kind === 'smp'){
-    const s = samples.find(x => String(x.id) === String(id));
+    const s = (id && typeof id==='object') ? id : samples.find(x => String(x.id) === String(id));
     if(!s) return;
     // 샘플의뢰 → 행 채우기 (재의뢰)
     row.name = s.name || '';
@@ -23711,6 +23738,9 @@ function renderItemSearchResults(){
 
   const pdPool=pdAll.slice((_itemSearchPdPage-1)*ISEARCH_PAGE_SIZE,_itemSearchPdPage*ISEARCH_PAGE_SIZE);
   const smpPool=smpAll.slice((_itemSearchSmpPage-1)*ISEARCH_PAGE_SIZE,_itemSearchSmpPage*ISEARCH_PAGE_SIZE);
+  // 인덱스로 정확히 참조 (id float 변환으로 엉뚱한 품목이 선택되던 문제 방지)
+  window._itemSearchPdPool = pdPool;
+  window._itemSearchSmpPool = smpPool;
 
   if(!pdTotal&&!smpTotal){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px">검색 결과 없음</div>';return;}
 
@@ -23720,7 +23750,7 @@ function renderItemSearchResults(){
     <button onclick="${next}" ${cur===total?'disabled':''} style="padding:4px 12px;border:1px solid var(--bdr);border-radius:4px;background:var(--s1);cursor:pointer;font-size:12px;font-family:inherit;color:var(--t2)">다음 ›</button>
   </div>`;
 
-  const mkPd=p=>{
+  const mkPd=(p,_i)=>{
     const img=p.imgs&&p.imgs.length?`<img src="${p.imgs[0].url}" style="width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--bdr)">`:`<div style="width:48px;height:48px;border-radius:5px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>`;
     // 등록일 / 최종수정일
     const regDate = p.createdDate || (p.createdAt ? p.createdAt.slice(0,10) : '');
@@ -23728,9 +23758,9 @@ function renderItemSearchResults(){
     const dateLine = (regDate || modDate)
       ? `<div style="font-size:9.5px;color:var(--t3);margin-top:2px">${regDate?`📅 등록 ${regDate}`:''}${regDate&&modDate?' · ':''}${modDate?`✎ 수정 ${modDate}`:''}</div>`
       : '';
-    return`<div onclick="applyProductToRow(${p.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bdr);border-radius:7px;cursor:pointer;background:var(--s1)" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='var(--s1)'">${img}<div style="flex:1;min-width:0"><div style="display:flex;gap:5px;margin-bottom:3px"><span style="font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--gold-bg);border:1px solid var(--gold-line);color:var(--gold-lt);font-weight:700">📦 제품DB</span>${p.code?`<span style="font-size:10px;font-family:monospace;color:var(--t3)">${p.code}</span>`:''}</div><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div><div style="font-size:10.5px;color:var(--t2)">${p.type||''} · ${p.mat||''} / ${p.plating||''}${p.size?' · '+p.size:''}</div>${dateLine}</div><div style="text-align:right;flex-shrink:0">${p.price?`<div style="font-size:12px;font-weight:700;color:var(--gold-lt)">${p.price.toLocaleString()}원</div>`:''}</div></div>`;
+    return`<div onclick="applyProductToRowByIdx(${_i})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bdr);border-radius:7px;cursor:pointer;background:var(--s1)" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='var(--s1)'">${img}<div style="flex:1;min-width:0"><div style="display:flex;gap:5px;margin-bottom:3px"><span style="font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--gold-bg);border:1px solid var(--gold-line);color:var(--gold-lt);font-weight:700">📦 제품DB</span>${p.code?`<span style="font-size:10px;font-family:monospace;color:var(--t3)">${p.code}</span>`:''}</div><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div><div style="font-size:10.5px;color:var(--t2)">${p.type||''} · ${p.mat||''} / ${p.plating||''}${p.size?' · '+p.size:''}</div>${dateLine}</div><div style="text-align:right;flex-shrink:0">${p.price?`<div style="font-size:12px;font-weight:700;color:var(--gold-lt)">${p.price.toLocaleString()}원</div>`:''}</div></div>`;
   };
-  const mkSmp=s=>{
+  const mkSmp=(s,_i)=>{
     const hasCode=!!s.itemCode;
     const stCls={의뢰:'chip',제작중:'cb',수정중:'co',확정:'cg',취소:'chip'}[s.status]||'chip';
     const img=s.imgs&&s.imgs.length?`<img src="${s.imgs[0].url||s.imgs[0]}" style="width:48px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--bdr)">`:`<div style="width:48px;height:48px;border-radius:5px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">◎</div>`;
@@ -23740,7 +23770,7 @@ function renderItemSearchResults(){
     const dateLine = (reqDate || dueDate)
       ? `<div style="font-size:9.5px;color:var(--t3);margin-top:2px">${reqDate?`📅 의뢰 ${reqDate}`:''}${reqDate&&dueDate?' → ':''}${dueDate?`납기 <b style="color:var(--t2)">${dueDate}</b>`:''}</div>`
       : '';
-    return`<div onclick="applyItemToRow(${s.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bdr);border-radius:7px;cursor:pointer;background:var(--s1)" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='var(--s1)'">${img}<div style="flex:1;min-width:0"><div style="display:flex;gap:6px;margin-bottom:3px">${hasCode?`<span style="font-size:10px;font-weight:700;color:var(--gold-lt);background:var(--gold-bg);border:1px solid var(--gold-line);padding:1px 6px;border-radius:4px">📌 ${s.itemCode}</span>`:'<span style="font-size:10px;color:var(--t3);background:var(--s2);padding:1px 6px;border-radius:4px">품번없음</span>'}<span class="chip ${stCls}" style="font-size:9.5px">${s.status}</span></div><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div style="font-size:10.5px;color:var(--t2)">${s.type||''} · ${s.mat||''} / ${s.plating||''}${s.sz1?' · '+s.sz1:''}</div>${dateLine}</div><div style="text-align:right;flex-shrink:0">${s.unitPrice?`<div style="font-size:12px;font-weight:700;color:var(--gold-lt)">${s.unitPrice.toLocaleString()}원</div>`:''}</div></div>`;
+    return`<div onclick="applyItemToRowByIdx(${_i})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bdr);border-radius:7px;cursor:pointer;background:var(--s1)" onmouseover="this.style.background='var(--gold-bg)'" onmouseout="this.style.background='var(--s1)'">${img}<div style="flex:1;min-width:0"><div style="display:flex;gap:6px;margin-bottom:3px">${hasCode?`<span style="font-size:10px;font-weight:700;color:var(--gold-lt);background:var(--gold-bg);border:1px solid var(--gold-line);padding:1px 6px;border-radius:4px">📌 ${s.itemCode}</span>`:'<span style="font-size:10px;color:var(--t3);background:var(--s2);padding:1px 6px;border-radius:4px">품번없음</span>'}<span class="chip ${stCls}" style="font-size:9.5px">${s.status}</span></div><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div style="font-size:10.5px;color:var(--t2)">${s.type||''} · ${s.mat||''} / ${s.plating||''}${s.sz1?' · '+s.sz1:''}</div>${dateLine}</div><div style="text-align:right;flex-shrink:0">${s.unitPrice?`<div style="font-size:12px;font-weight:700;color:var(--gold-lt)">${s.unitPrice.toLocaleString()}원</div>`:''}</div></div>`;
   };
 
   let html='';
@@ -23760,8 +23790,20 @@ function renderItemSearchResults(){
   el.innerHTML=`<div style="display:flex;flex-direction:column">${html}</div>`;
 }
 
+// 인덱스로 정확히 해당 품목을 발주 행에 적용 (id float 변환 오류 방지)
+function applyProductToRowByIdx(idx){
+  const p=(window._itemSearchPdPool||[])[idx];
+  if(!p){ showToast('⚠ 품목을 찾을 수 없습니다','var(--red)'); return; }
+  applyProductToRow(p);
+}
+function applyItemToRowByIdx(idx){
+  const s=(window._itemSearchSmpPool||[])[idx];
+  if(!s){ showToast('⚠ 샘플을 찾을 수 없습니다','var(--red)'); return; }
+  applyItemToRow(s);
+}
+
 function applyProductToRow(pdId){
-  const p=productDB.find(x=>x.id==pdId); if(!p)return;
+  const p=(pdId && typeof pdId==='object') ? pdId : productDB.find(x=>x.id==pdId); if(!p)return;
   const i=_itemSearchRowIdx;
   if(i<0||i>=ordRowsBuf.length)return;
   ordRowsBuf[i].name=p.code?`${p.name} [${p.code}]`:p.name;
@@ -23785,7 +23827,7 @@ function applyProductToRow(pdId){
 }
 
 function applyItemToRow(smpId){
-  const s = samples.find(x=>x.id==smpId);
+  const s = (smpId && typeof smpId==='object') ? smpId : samples.find(x=>x.id==smpId);
   if(!s) return;
   const i = _itemSearchRowIdx;
   if(i < 0 || i >= ordRowsBuf.length) return;
