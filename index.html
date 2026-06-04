@@ -26948,8 +26948,9 @@ function _renderQtProductPickerList(){
       return;
     }
     const pdShown = pdList.slice(0, 50);
+    window._qtPickerShown = pdShown; // 인덱스로 정확히 참조 (id float 변환 오류 방지)
     const total = pdList.length;
-    el.innerHTML = pdShown.map(p=>{
+    el.innerHTML = pdShown.map((p, _idx)=>{
       // ID 기준 중복 체크 (같은 품목코드가 도금별로 여러 개 있는 경우 — 따로 처리)
       const linked = _qtRowsBuf.some(r=>r._pdId != null && String(r._pdId)===String(p.id));
       const wt = p.weight || 0;
@@ -26971,7 +26972,7 @@ function _renderQtProductPickerList(){
             입고단가 ${cn||'-'} · 시세 ${mr||'-'} · 생산원가 ₩${pc.toLocaleString()} · 판매단가 ₩${pr.toLocaleString()}
           </div>
         </div>
-        <button ${linked?'disabled':''} onclick="addProductToQuote(${p.id})" style="padding:5px 12px;font-size:11px;background:${linked?'var(--s2)':'var(--blu)'};color:${linked?'var(--t3)':'#fff'};border:none;border-radius:4px;cursor:${linked?'default':'pointer'};font-family:inherit;flex-shrink:0">${linked?'추가됨':'+ 추가'}</button>
+        <button ${linked?'disabled':''} onclick="addProductToQuoteByIdx(${_idx})" style="padding:5px 12px;font-size:11px;background:${linked?'var(--s2)':'var(--blu)'};color:${linked?'var(--t3)':'#fff'};border:none;border-radius:4px;cursor:${linked?'default':'pointer'};font-family:inherit;flex-shrink:0">${linked?'추가됨':'+ 추가'}</button>
       </div>`;
     }).join('') + (total>50?`<div style="padding:10px;text-align:center;color:var(--t3);font-size:11px;background:var(--s1)">상위 50건만 표시 (총 ${total.toLocaleString()}건) — 검색어를 좁혀주세요</div>`:'');
     return;
@@ -27032,10 +27033,20 @@ function _renderQtProductPickerList(){
   }).join('') + (total>50?`<div style="padding:10px;text-align:center;color:var(--t3);font-size:11px;background:var(--s1)">상위 50건만 표시 (총 ${total.toLocaleString()}건) — 검색어를 좁혀주세요</div>`:'');
 }
 
+// 인덱스로 정확히 해당 품목을 견적에 추가 (id float 변환으로 엉뚱한 품목이 선택되던 문제 방지)
+function addProductToQuoteByIdx(idx){
+  const shown = window._qtPickerShown || [];
+  const p = shown[idx];
+  if(!p){ showToast('⚠ 품번을 찾을 수 없습니다','var(--red)'); return; }
+  addProductToQuote(p);
+}
+
 function addProductToQuote(idOrCode){
-  // id (숫자) 또는 code (문자열) 모두 받음
+  // 품목 객체를 직접 받거나, id(숫자)/code(문자열)로 조회
   let p = null;
-  if(idOrCode != null){
+  if(idOrCode && typeof idOrCode === 'object'){
+    p = idOrCode; // 객체를 직접 전달받은 경우 (인덱스 경로) — 가장 정확
+  } else if(idOrCode != null){
     p = productDB.find(x => String(x.id) === String(idOrCode));
     if(!p) p = productDB.find(x => x.code === idOrCode);
   }
@@ -30753,8 +30764,9 @@ function _renderInvProductPickerList(){
     return;
   }
   const shown = list.slice(0,50);
+  window._invPickerShown = shown; // 인덱스로 정확히 참조 (id float 변환 오류 방지)
   const total = list.length;
-  el.innerHTML = shown.map(p=>{
+  el.innerHTML = shown.map((p, _idx)=>{
     // ID 기준으로 중복 체크 (같은 품목코드의 다른 제품 — 예: GD/SV — 별개로 처리)
     const linked = _invRowsBuf.some(r=>r._pdId != null && String(r._pdId)===String(p.id));
     return `
@@ -30771,15 +30783,25 @@ function _renderInvProductPickerList(){
           판매단가 ₩${(+p.price||0).toLocaleString()}
         </div>
       </div>
-      <button ${linked?'disabled':''} onclick="addProductToInv(${p.id})" style="padding:5px 12px;font-size:11px;background:${linked?'var(--s2)':'var(--blu)'};color:${linked?'var(--t3)':'#fff'};border:none;border-radius:4px;cursor:${linked?'default':'pointer'};font-family:inherit;flex-shrink:0">${linked?'추가됨':'+ 추가'}</button>
+      <button ${linked?'disabled':''} onclick="addProductToInvByIdx(${_idx})" style="padding:5px 12px;font-size:11px;background:${linked?'var(--s2)':'var(--blu)'};color:${linked?'var(--t3)':'#fff'};border:none;border-radius:4px;cursor:${linked?'default':'pointer'};font-family:inherit;flex-shrink:0">${linked?'추가됨':'+ 추가'}</button>
     </div>`;
   }).join('') + (total>50?`<div style="padding:10px;text-align:center;color:var(--t3);font-size:11px;background:var(--s1)">상위 50건만 표시 (총 ${total.toLocaleString()}건)</div>`:'');
 }
 
+// 인덱스로 정확히 해당 품목을 거래명세서에 추가 (id float 변환 오류 방지)
+function addProductToInvByIdx(idx){
+  const shown = window._invPickerShown || [];
+  const p = shown[idx];
+  if(!p){ showToast('⚠ 품번을 찾을 수 없습니다','var(--red)'); return; }
+  addProductToInv(p);
+}
+
 function addProductToInv(idOrCode){
-  // id (숫자) 또는 code (문자열) 모두 받음 — 우선순위: id 먼저, 그 다음 code
+  // 품목 객체를 직접 받거나, id(숫자)/code(문자열)로 조회
   let p = null;
-  if(idOrCode != null){
+  if(idOrCode && typeof idOrCode === 'object'){
+    p = idOrCode; // 객체 직접 전달 (인덱스 경로) — 가장 정확
+  } else if(idOrCode != null){
     // 숫자형 id로 먼저 찾기 (정확한 매칭)
     p = productDB.find(x => String(x.id) === String(idOrCode));
     // 못 찾으면 code로도 시도 (옛 호출 호환)
