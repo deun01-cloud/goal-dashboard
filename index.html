@@ -2605,7 +2605,7 @@ async function applyASParseAll(){
   }
   save();
   _asAIPasteCleanup();
-  closeM('mAS');
+  closeMAfterSave('mAS');
   if(failed > 0){
     showToast(`⚠ AS 등록 결과 — 성공 ${added}건 / 실패 ${failed}건 (Notion 동기화 실패)`, 'var(--org)', 6000);
   } else {
@@ -2668,7 +2668,7 @@ async function saveAS(){
     const ok = await createWithNotion(asItems, na, syncASToNotion, 'AS');
     if(!ok) return; // 실패 — 모달 유지
   }
-  save();_asAIPasteCleanup();closeM('mAS');renderTab();updateBadges();
+  save();_asAIPasteCleanup();closeMAfterSave('mAS');renderTab();updateBadges();
   showToast('✓ AS 저장됨','var(--grn)');
 }
 
@@ -2678,7 +2678,7 @@ function deleteAS(){
   showConfirm(`"${a?.item||'AS 항목'}"을 삭제합니다.`,()=>{
     if(a) deleteASFromNotion(a);
     asItems=asItems.filter(x=>x.id!=id);
-    save();closeM('mAS');renderTab();updateBadges();
+    save();closeMAfterSave('mAS');renderTab();updateBadges();
   });
 }
 
@@ -10331,7 +10331,7 @@ async function saveIo(idOrNull){
     }
   }
   save();
-  closeM('mIo');
+  closeMAfterSave('mIo');
   showToast(`✓ ${isEdit?'수정':'등록'} 완료${stockMsg}`,'var(--grn)',2500);
   renderIo();
   // 노션 동기화 (백그라운드)
@@ -10502,7 +10502,7 @@ async function deleteIo(idOrNull){
   }
   if(typeof realtimeDelete === 'function') try{ realtimeDelete('io', io); }catch(_){}
   save();
-  closeM('mIo');
+  closeMAfterSave('mIo');
   showToast((notionOk ? '✓ 삭제 완료' : '⚠ 로컬만 삭제 — 노션 실패') + restoredMsg,'var(--grn)',2800);
   renderIo();
 }
@@ -14818,7 +14818,7 @@ window.fixFactShip=function(){
 const _modalSaveFnMap = {
   'mSmp':    () => (typeof saveSmp === 'function')   ? saveSmp()    : null,
   'mOrd':    () => (typeof saveOrd === 'function')   ? saveOrd()    : null,
-  'mAs':     () => (typeof saveAS === 'function')    ? saveAS()     : null,
+  'mAS':     () => (typeof saveAS === 'function')    ? saveAS()     : null,
   'mIo':     () => (typeof saveIo === 'function')    ? saveIo()     : null,
   'mQuote':  () => (typeof saveQuote === 'function') ? saveQuote()  : null,
   'mProc':   () => (typeof saveProc === 'function')  ? saveProc()   : null,
@@ -14923,6 +14923,15 @@ function closeM(id){
   // 데이터 모달이면 safe close, 아니면 그냥 닫음
   if(_modalSaveFnMap[id]) return _safeCloseM(id);
   return _rawCloseM(id);
+}
+// 📌 저장 성공 직후 모달 닫기 — dirty check를 건너뛴다.
+//    save 함수가 closeM()을 부르면 입력값이 그대로라 dirty로 판정되어
+//    "저장하시겠습니까?" 확인창이 다시 뜨고, [확인] 시 save가 한 번 더 실행돼
+//    신규 항목이 중복 생성되던 버그를 차단한다. (업무·발주·샘플·견적 등 전 모달 공통)
+function closeMAfterSave(id){
+  const ov = document.getElementById(id);
+  if(ov){ delete ov._initialSnapshot; delete ov._snapshotTakenAt; }
+  _rawCloseM(id);
 }
 function openM(id){
   const ov = document.getElementById(id);
@@ -22577,7 +22586,7 @@ function saveSmp(){
       const ok = await createWithNotion(samples, newSmp, syncSampleToNotion, '샘플의뢰');
       if(!ok){ _releaseSmpLock(); return; } // 실패 — 모달 유지, 사용자가 다시 시도하거나 닫음
     }
-    save();closeM('mSmp');renderTab();updateBadges();
+    save();closeMAfterSave('mSmp');renderTab();updateBadges();
     _releaseSmpLock();
     if(!id){
       showRegToast(finalObj.name,'sample');
@@ -22634,7 +22643,7 @@ function saveAndInvoice(){
   }
   // 화면 갱신
   if(typeof renderTab === 'function') renderTab();
-  closeM('mSmp');
+  closeMAfterSave('mSmp');
   setTimeout(()=>openInvoice(id),100);
 }
 // ════════════════════════════════
@@ -22685,7 +22694,7 @@ function deleteSmp(){
   showConfirm(`"${s?.name||'샘플'}"을 삭제합니다.`, ()=>{
     if(s) deleteSampleFromNotion(s);
     samples=samples.filter(x=>x.id!=id);
-    save();closeM('mSmp');renderTab();updateBadges();
+    save();closeMAfterSave('mSmp');renderTab();updateBadges();
   });
 }
 
@@ -22698,7 +22707,7 @@ function deleteOrd(){
     procItems.filter(x=>x.orderId==id).forEach(p=>{ if(p._notionId) deleteProcFromNotion(p); });
     orders=orders.filter(x=>x.id!=id);
     procItems=procItems.filter(x=>x.orderId!=id);
-    save();closeM('mOrd');renderTab();updateBadges();
+    save();closeMAfterSave('mOrd');renderTab();updateBadges();
   });
 }
 
@@ -22708,7 +22717,7 @@ function deleteProc(){
   showConfirm(`"${p?.name||'공정 항목'}"을 삭제합니다.`, ()=>{
     if(p) deleteProcFromNotion(p);
     procItems=procItems.filter(x=>x.id!=id);
-    save();closeM('mProc');renderTab();updateBadges();
+    save();closeMAfterSave('mProc');renderTab();updateBadges();
   });
 }function confirmSmp(){
   const id=gv('s_id');const s=samples.find(x=>x.id==id);if(!s)return;
@@ -22720,7 +22729,7 @@ function deleteProc(){
   if(s._notionId && typeof debouncedSync === 'function'){
     debouncedSync('sample', s, true);
   }
-  save();closeM('mSmp');showToast(`✓ "${s.name}" 완료 처리 + 발주서 자동 생성`);renderTab();updateBadges();
+  save();closeMAfterSave('mSmp');showToast(`✓ "${s.name}" 완료 처리 + 발주서 자동 생성`);renderTab();updateBadges();
 }
 
 // 샘플 모달의 완료 토글 버튼 — 발주 생성 없이 상태만 전환
@@ -22740,7 +22749,7 @@ function toggleSmpComplete(){
           debouncedSync('sample', s, true);
         }
         save();
-        closeM('mSmp');
+        closeMAfterSave('mSmp');
         renderTab();
         updateBadges();
         showToast('↺ 완료 해제됨','var(--blu)',2500);
@@ -22761,7 +22770,7 @@ function toggleSmpComplete(){
   const sqty = (typeof parseQty==='function' ? parseQty(s.qty) : (parseInt(s.qty)||1)) || 1;
   if(unitPrice > 0) items.push({ name:(s.name||'')+' 샘플 단가', code:s.itemNo||'', qty:sqty, unit:unitPrice });
   if(!items.length) items.push({ name:s.name||'(샘플)', code:s.itemNo||'', qty:sqty, unit:0 });
-  closeM('mSmp');
+  closeMAfterSave('mSmp');
   openStandaloneInvoiceModal(null, {
     fromSample: true,
     completeSampleId: s.id,    // 발행 시 이 샘플을 완료 처리
@@ -24122,7 +24131,7 @@ function toggleOrdComplete(){
           debouncedSync('order', o, true);
         }
         save();
-        closeM('mOrd');
+        closeMAfterSave('mOrd');
         renderTab();
         updateBadges();
         showToast('↺ 출고완료 해제됨','var(--blu)',2500);
@@ -24165,7 +24174,7 @@ function toggleOrdComplete(){
   if(!_hasRemaining){
     showToast('ℹ 모든 품목이 이미 출고완료되었습니다','var(--org)', 3000);
   }
-  closeM('mOrd');
+  closeMAfterSave('mOrd');
   openStandaloneInvoiceModal(null, {
     fromOrder: true,
     completeOrderOnIssue: true,   // 발행 시 발주도 출고완료 처리
@@ -24425,7 +24434,7 @@ async function saveOrd(forceOverwrite){
       }
     }
   }
-  closeM('mOrd');renderTab();updateBadges();
+  closeMAfterSave('mOrd');renderTab();updateBadges();
 }
 // saveOrd, deleteOrd defined above
 
@@ -24451,7 +24460,7 @@ async function saveProc(){
     const ok = await createWithNotion(procItems, np, syncProcToNotion, '공정');
     if(!ok) return;
   }
-  save();closeM('mProc');renderTab();updateBadges();
+  save();closeMAfterSave('mProc');renderTab();updateBadges();
 }
 // deleteProc defined above
 
@@ -24586,7 +24595,7 @@ async function saveTask(){
     const ok = await createWithNotion(tasks, nt, syncTaskToNotion, '업무일지');
     if(!ok) return;
   }
-  save();closeM('mTask');
+  save();closeMAfterSave('mTask');
   if(currentTab==='schedule')renderSchedContent();
   if(currentTab==='dash')renderDash();
 }
@@ -24595,7 +24604,7 @@ function deleteTask(){
   const dt=tasks.find(x=>x.id==id);
   showConfirm('이 업무를 삭제합니다.',()=>{
     if(dt) deleteTaskFromNotion(dt);
-    tasks=tasks.filter(x=>x.id!=id);save();closeM('mTask');
+    tasks=tasks.filter(x=>x.id!=id);save();closeMAfterSave('mTask');
     if(currentTab==='schedule')renderSchedContent();
     if(currentTab==='dash')renderDash();
   },'업무 삭제','🗑');
@@ -27579,7 +27588,7 @@ function transferQuoteToOrder(quoteId){
     issuedAt: q.issuedAt || ''
   };
   // 견적서 모달 닫고 발주서 모달 열기
-  closeM('mQuote');
+  closeMAfterSave('mQuote');
   if(typeof openOrdModal === 'function'){
     openOrdModal(null);
     // 모달이 열리고 나서 vendor와 견적번호 메모 자동 채우기 (약간 딜레이)
@@ -27637,7 +27646,7 @@ function transferQuoteToSample(quoteId){
     return;
   }
   // 여러 행 → 다중 모달로 미리 채워서 열기
-  closeM('mQuote');
+  closeMAfterSave('mQuote');
   const RATE = (typeof window.QUOTE_CN_RATE !== 'undefined') ? window.QUOTE_CN_RATE : 220;
   // 견적 spec(카테고리) → 샘플 type 매핑 함수
   const specToType = (spec)=>{
@@ -27687,7 +27696,7 @@ function _doTransferToSample(q, row){
   // 견적서 행 → 샘플 객체 매핑
   // 샘플 필수 필드: name, mat, plating, sz1, qty, type
   // 단가 필드: costPrice(입고원가), unitPrice(샘플단가), devCost(개발비)
-  closeM('mQuote');
+  closeMAfterSave('mQuote');
   if(typeof openSmpModal === 'function'){
     openSmpModal(null);
     setTimeout(()=>{
@@ -27855,7 +27864,7 @@ async function saveQuote(forceOverwrite){
     }).catch(e=>console.warn('견적 노션 sync 실패:',e));
   }
 
-  closeM('mQuote');
+  closeMAfterSave('mQuote');
   // 결과 토스트: 견적 + 제품DB 처리 결과 함께 표시
   const baseMsg = isNew?'✓ 견적서 등록됨':'✓ 견적서 수정됨';
   const pdbMsg = (pdbResult.createdCount||pdbResult.updatedCount)
@@ -27873,7 +27882,7 @@ function deleteQuote(){
     if(q._notionId) deleteQuoteFromNotion(q);
     quotes = quotes.filter(x=>String(x.id)!==String(id));
     slSave();
-    closeM('mQuote');
+    closeMAfterSave('mQuote');
     showToast('✓ 견적서 삭제됨','var(--grn)');
     renderSalesSubTab();
   },'견적서 삭제','🗑');
