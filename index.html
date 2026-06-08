@@ -8687,6 +8687,8 @@ function mapNotionProposal(row){
     reaction:  np.select(p['반응'])||'대기중',
     date:      np.date(p['제안일']),
     nextDate:  np.date(p['다음제안예정']),
+    _isDraft:  np.check(p['초안여부'])||false,
+    draftJSON: np.text(p['초안JSON'])||'',
     memo:'', images:[],
   };
 }
@@ -12853,6 +12855,15 @@ async function syncProposalToNotion(prop, update){
   if(prop.reaction) p["반응"]={"select":{"name":prop.reaction}};
   if(prop.date)     p["제안일"]={"date":{"start":prop.date}};
   if(prop.nextDate) p["다음제안예정"]={"date":{"start":prop.nextDate}};
+  // 📑 제안서 생성기 초안 — 작성 중인 _pg 상태를 JSON으로 보관 (이어서 작성용)
+  p["초안여부"]={"checkbox": !!prop._isDraft};
+  if(prop.draftJSON){
+    const chunkFn = (typeof chunkRichText==='function') ? chunkRichText
+      : (s)=>[{ "text":{ "content": String(s||'').slice(0,2000) } }];
+    p["초안JSON"]={"rich_text": chunkFn(prop.draftJSON)};
+  } else {
+    p["초안JSON"]={"rich_text":[]};
+  }
   if(prop._notionId){ await nUpdate(prop._notionId,p); }
   else{
     const r=await nCreate(notionCfg.propDb,p);
@@ -32036,6 +32047,30 @@ function closeNdCell(){ _ndCellVendor=null; _ndCellMonth=null; renderSalesSubTab
 function vNewProposals(c){
   const STATUS_COLORS={'기획':'var(--t3)','제안':'var(--blu)','피드백':'var(--org)','채택':'var(--grn)','거절':'var(--red)'};
 
+  // 📑 제안서 생성기 초안 배너 — proposals 중 _isDraft인 항목
+  const _drafts = (typeof proposals!=='undefined'?proposals:[]).filter(p=>p && p._isDraft && p.draftJSON);
+  const _draftBanner = _drafts.length ? (
+    '<div class="card" style="margin-bottom:12px;border:1px solid var(--gold-line);background:var(--gold-bg)">'
+    + '<div class="ch"><div class="ch-t">📑 작성 중인 제안서 초안 ('+_drafts.length+')</div>'
+    + '<div class="ch-s">이어서 작성하거나 삭제할 수 있습니다</div></div>'
+    + '<div style="padding:4px 4px 8px">'
+    + _drafts.sort((a,b)=>{
+        const ad=(()=>{try{return Date.parse(JSON.parse(a.draftJSON).savedAt)||0}catch(_){return 0}})();
+        const bd=(()=>{try{return Date.parse(JSON.parse(b.draftJSON).savedAt)||0}catch(_){return 0}})();
+        return bd-ad;
+      }).map(p=>{
+        let savedLbl='', stepLbl='';
+        try{ const s=JSON.parse(p.draftJSON); savedLbl=(s.savedAt||'').slice(0,16).replace('T',' '); stepLbl=['','정보입력','AI생성','이미지선택','미리보기'][s.step||1]||''; }catch(_){}
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bdr)">'
+          + '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(p.clientName||'제안서')+'</div>'
+          + '<div style="font-size:11px;color:var(--t3)">'+(stepLbl?('단계: '+stepLbl+' · '):'')+'저장 '+savedLbl+'</div></div>'
+          + '<button onclick="pgLoadDraft('+JSON.stringify(String(p.id))+')" style="padding:6px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid var(--gold);background:var(--s1);color:var(--gold)">📑 이어서 작성</button>'
+          + '<button onclick="pgDeleteDraft('+JSON.stringify(String(p.id))+')" style="padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;border:1px solid var(--red);background:var(--s1);color:var(--red)">삭제</button>'
+          + '</div>';
+      }).join('')
+    + '</div></div>'
+  ) : '';
+
   // ── 그리드 뷰: 행=고객사, 열=월 (최근 6개월), 셀=채택/전체 ──
   if(_ndViewMode==='grid'){
     // 최근 6개월 (오늘 포함, 오래된 → 최근 순)
@@ -32193,6 +32228,7 @@ function vNewProposals(c){
 
     ${_ndCellVendor && _ndCellMonth ? renderNdCellDetail() : ''}
     `;
+    if(_draftBanner) c.insertAdjacentHTML('afterbegin', _draftBanner);
     return;
   }
 
@@ -32263,6 +32299,8 @@ function vNewProposals(c){
       등록된 제안이 없습니다
     </div>`}
   </div>`;
+  // 📑 초안 배너를 화면 최상단에 추가 (grid/list 양쪽 공통)
+  if(_draftBanner) c.insertAdjacentHTML('afterbegin', _draftBanner);
 }
 
 // ════════════════════════════════════════════════
@@ -32270,11 +32308,125 @@ function vNewProposals(c){
 //   고객사 입력 → AI 분석(callClaudeAPI + 웹검색) → 이미지 검색(/imgsearch)
 //   → 카테고리별 이미지 격자 PPTX 출력
 // ════════════════════════════════════════════════
-var _pg = { step:1, input:{}, diag:'', trend:[], cats:[], aiBusy:false };
+var _pg = { step:1, input:{}, diag:'', trend:[], cats:[], aiBusy:false, _draftId:null };
+
+// 📑 제안서 생성기 초안 저장 — 신규 제안 탭(영업제안 DB)에 초안으로 보관.
+//   이미지(slots)는 R2에 업로드해 URL로 저장 → 노션 동기화가 무거워지지 않음.
+async function pgSaveDraft(){
+  if(_pg.step < 2 && !(_pg.input && _pg.input.client)){
+    showToast('⚠ 고객사 정보를 먼저 입력해주세요','var(--org)',2500);
+    return;
+  }
+  const clientName = (_pg.input && (_pg.input.client||_pg.input.clientName)) || '';
+  if(!requireNotion('propDb','영업제안')) return;
+
+  showToast('🔄 초안 저장 중… (이미지 업로드)','var(--blu)',3000);
+
+  // 1) 로컬(base64) 이미지를 R2에 업로드해 URL로 치환
+  try{
+    if(typeof uploadImagesToR2==='function'){
+      for(const cat of (_pg.cats||[])){
+        if(!Array.isArray(cat.slots)) continue;
+        const localSlots=[];
+        cat.slots.forEach((s,i)=>{ if(s && s._local && s.url && String(s.url).startsWith('data:')) localSlots.push({i,s}); });
+        if(localSlots.length){
+          const uploaded=await uploadImagesToR2(localSlots.map(({s})=>({url:s.url,name:'pg.jpg',type:'image/jpeg'})));
+          uploaded.forEach((u,k)=>{
+            const idx=localSlots[k].i;
+            if(u && u.url){ cat.slots[idx]={url:u.url, thumb:u.url, _local:false}; }
+          });
+        }
+      }
+    }
+  }catch(e){ console.warn('초안 이미지 업로드 일부 실패:',e); }
+
+  // 2) _pg 상태 직렬화 (함수/일시값 제외)
+  const snapshot = {
+    step: _pg.step,
+    input: _pg.input || {},
+    diag: _pg.diag || '',
+    trend: _pg.trend || [],
+    cats: (_pg.cats||[]).map(c=>({
+      name:c.name||'', logic:c.logic||'', kw:c.kw||'',
+      prompts: c.prompts||c.variants||null,
+      slots: Array.isArray(c.slots) ? c.slots.map(s=> s && s.url ? {url:s.url, thumb:s.thumb||s.url} : null) : [null,null,null,null,null],
+    })),
+    savedAt: new Date().toISOString(),
+  };
+  const draftJSON = JSON.stringify(snapshot);
+
+  const cl = clients.find(c=>c.name===clientName);
+  const title = (clientName||'제안서') + ' — 작성중 초안';
+
+  // 3) 기존 초안 업데이트 or 신규 생성
+  let prop = _pg._draftId ? proposals.find(p=>String(p.id)===String(_pg._draftId)) : null;
+  if(prop){
+    prop.name=title; prop.clientName=clientName; prop.clientId=cl?.id||null;
+    prop.draftJSON=draftJSON; prop._isDraft=true; prop.type='디자인제안';
+    prop.date=prop.date||todayStr;
+    try{ await syncProposalToNotion(prop, true); }
+    catch(e){ console.warn('초안 노션 저장 실패:',e); showToast('⚠ 초안 로컬 저장됨 (노션 실패)','var(--org)',3000); }
+    if(typeof slSave==='function') slSave();
+  } else {
+    const np={ id:Date.now(), name:title, clientName, clientId:cl?.id||null,
+      type:'디자인제안', reaction:'대기중', date:todayStr,
+      draftJSON, _isDraft:true, memo:'', images:[] };
+    const ok = await createWithNotion(proposals, np, syncProposalToNotion, '제안서 초안', {useUnshift:true});
+    if(!ok) return;
+    _pg._draftId = np.id;
+    if(typeof slSave==='function') slSave();
+  }
+  showToast('✓ 초안 저장됨 — 신규 제안 탭에서 이어서 작성할 수 있어요','var(--grn)',3500);
+}
+
+// 📑 초안 불러오기 → _pg 복원 후 제안서 생성기 탭으로 이동
+function pgLoadDraft(propId){
+  const prop = proposals.find(p=>String(p.id)===String(propId));
+  if(!prop || !prop.draftJSON){ showToast('⚠ 초안 데이터를 찾을 수 없습니다','var(--red)'); return; }
+  let snap;
+  try{ snap=JSON.parse(prop.draftJSON); }
+  catch(e){ showToast('⚠ 초안 데이터 형식 오류','var(--red)'); return; }
+  _pg = {
+    step: snap.step||1,
+    input: snap.input||{},
+    diag: snap.diag||'',
+    trend: snap.trend||[],
+    cats: (snap.cats||[]).map(c=>({
+      name:c.name||'', logic:c.logic||'', kw:c.kw||'',
+      prompts:c.prompts||null,
+      slots: Array.isArray(c.slots) ? c.slots.map(s=> s && s.url ? {url:s.url, thumb:s.thumb||s.url, _local:false} : null) : [null,null,null,null,null],
+    })),
+    aiBusy:false,
+    _draftId: prop.id,
+  };
+  if(typeof setSalesSubTab==='function') setSalesSubTab('pgen');
+  showToast('✓ 초안을 불러왔습니다','var(--grn)',2500);
+}
+
+// 📑 초안 삭제
+function pgDeleteDraft(propId){
+  const prop = proposals.find(p=>String(p.id)===String(propId));
+  if(!prop){ return; }
+  showConfirm('이 제안서 초안을 삭제합니다.', ()=>{
+    if(prop._notionId && typeof deleteProposalFromNotion==='function') deleteProposalFromNotion(prop);
+    proposals = proposals.filter(p=>String(p.id)!==String(propId));
+    if(_pg._draftId && String(_pg._draftId)===String(propId)) _pg._draftId=null;
+    if(typeof slSave==='function') slSave();
+    if(typeof renderSalesSubTab==='function') renderSalesSubTab();
+    showToast('✓ 초안 삭제됨','var(--grn)',2000);
+  }, '초안 삭제', '🗑');
+}
 
 function vProposalGen(c){
   const step=_pg.step;
   let h='<div style="max-width:980px;margin:0 auto">';
+  // 임시저장 버튼 (정보 입력 이후 단계에서)
+  if(step>=2 || (_pg.input && _pg.input.client)){
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
+      +'<button onclick="pgSaveDraft()" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid var(--gold);background:rgba(168,90,16,.08);color:var(--gold)" title="작성 중인 제안서를 신규 제안 탭에 초안으로 저장합니다">💾 임시저장</button>'
+      +(_pg._draftId?'<span style="font-size:11px;color:var(--t3);align-self:center;margin-left:8px">초안 이어서 작성 중</span>':'')
+      +'</div>';
+  }
   // 스텝 인디케이터
   const steps=[['1','정보 입력'],['2','AI 생성'],['3','이미지 선택'],['4','미리보기·출력']];
   h+='<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
