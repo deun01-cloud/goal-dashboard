@@ -33084,7 +33084,8 @@ function clInitHtml(cl, small){
 // ─────────────────────────────────────────────────────
 function normalizeVendorName(s){
   return String(s||'')
-    .replace(/^\(.*?\)/,'')        // 맨 앞 (...)  제거 — (주), (유) 등
+    .replace(/\([^)]*\)/g,'')        // 모든 위치의 (...) 제거 — (주), (Axi studio) 등
+    .replace(/（[^）]*）/g,'')         // 전각 괄호도 제거
     .replace(/주식회사|㈜|\(주\)|\(유\)|유한회사/g,'')
     .replace(/\s+/g,'')              // 모든 공백 제거
     .trim()
