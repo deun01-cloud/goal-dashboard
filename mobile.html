@@ -590,7 +590,19 @@ async function nFetch(path,method,body){
   if(!res.ok){var err=await res.text();throw new Error(res.status+': '+err);}
   return res.json();
 }
-async function queryDB(dbId){var data=await nFetch('/databases/'+dbId.replace(/-/g,'')+'/query','POST',{page_size:100});return data.results||[];}
+async function queryDB(dbId){
+  var all=[],cursor=undefined,safety=0;
+  while(safety++<50){
+    var body={page_size:100};
+    if(cursor)body.start_cursor=cursor;
+    var data=await nFetch('/databases/'+dbId.replace(/-/g,'')+'/query','POST',body);
+    if(data.results&&data.results.length)all=all.concat(data.results);
+    if(!data.has_more)break;
+    cursor=data.next_cursor;
+    if(!cursor)break;
+  }
+  return all;
+}
 async function createPage(dbId,props){var data=await nFetch('/pages','POST',{parent:{database_id:dbId.replace(/-/g,'')},properties:props});return data.id;}
 async function updatePage(pageId,props){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{properties:props});}
 async function deletePage(pageId){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{archived:true});}
@@ -644,19 +656,19 @@ async function loadAll(){
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||''});
     });
     cache.weekly={};
     wR.forEach(function(p){
       var pr=p.properties,ym=rText(pr,'연월'),wk=rSelect(pr,'주차');if(!ym||!wk)return;
       var key=ym+' '+wk;if(!cache.weekly[key])cache.weekly[key]=[];
-      cache.weekly[key].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통'});
+      cache.weekly[key].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
     cache.monthly={};
     mR.forEach(function(p){
       var pr=p.properties,m=rSelect(pr,'월'),idx=MONTHS.indexOf(m);if(idx<0)return;
       if(!cache.monthly[idx])cache.monthly[idx]=[];
-      cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통'});
+      cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
     setSync('ok');
