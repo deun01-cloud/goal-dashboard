@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>목표 · 업무 대시보드</title>
+<title>DW대시보드</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -38,6 +38,28 @@
   .stat-frac { font-size: 22px; font-weight: 600; display: flex; align-items: baseline; gap: 1px; }
   .done-n{color:var(--text);} .sep{font-size:18px;color:var(--text3);margin:0 1px;} .total-n{font-size:16px;color:var(--text3);}
   .stat-label { font-size: 11px; color: var(--text2); margin-top: 3px; }
+  /* FP */
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .fp-stat{background:var(--bg2);border-radius:var(--radius-sm);padding:12px 14px;}
+  .fp-stat-val{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;}
+  .fp-stat-val.pos{color:var(--teal);} .fp-stat-val.neg{color:var(--meeting);}
+  .fp-stat-label{font-size:11px;color:var(--text2);margin-top:4px;}
+  .fp-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .fp-row:last-child{border-bottom:none;}
+  .fp-row .fp-name{flex:1;font-size:14px;}
+  .fp-row .fp-amt{font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+  .fp-cat{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg3);color:var(--text2);}
+  .fp-mtag{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--amber-light);color:var(--amber-dark);}
+  .fp-empty{color:var(--text3);font-size:13px;padding:8px 0;}
+  .proj-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);margin-bottom:6px;background:var(--bg2);font-size:13px;}
+  .proj-row.warn{background:var(--red-light);}
+  .proj-row.tight{background:var(--amber-light);}
+  .proj-month{width:64px;font-weight:600;color:var(--text);flex-shrink:0;}
+  .proj-flow{flex:1;color:var(--text2);font-variant-numeric:tabular-nums;}
+  .proj-bal{font-weight:700;font-variant-numeric:tabular-nums;}
+  .proj-bal.pos{color:var(--teal-dark,#155d44);} .proj-bal.neg{color:var(--red-dark);}
+  .proj-note{font-size:11px;color:var(--red-dark);margin-left:6px;}
+  @media(max-width:640px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
   .purple .done-n{color:var(--purple);} .teal .done-n{color:var(--teal);} .coral .done-n{color:var(--coral);} .blue .done-n{color:var(--blue);}
   .prog-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;}
   .prog-fill{height:100%;border-radius:3px;transition:width .3s;}
@@ -170,7 +192,7 @@
 </head>
 <body>
 <div class="app">
-  <h1>목표 · 업무 대시보드</h1>
+  <h1>DW대시보드</h1>
   <p class="subtitle">연간 · 분기 목표 및 일간 · 주간 · 월간 업무 — 노션 DB 연동 (어떤 기기에서도 유지)</p>
   <div class="sync-bar"><div class="sync-dot syncing" id="sync-dot"></div><span id="sync-label">노션 연결 중...</span></div>
   <div class="tabs">
@@ -178,6 +200,7 @@
     <button class="tab" onclick="goTab('tasks',this)">업무</button>
     <button class="tab" onclick="goTab('goals',this)">목표 관리</button>
     <button class="tab" onclick="goTab('trips',this)">휴가/출장</button>
+    <button class="tab" onclick="goTab('fp',this)">FP</button>
   </div>
 
   <!-- DASHBOARD -->
@@ -408,6 +431,100 @@
       <p style="margin-bottom:8px;">대시보드 탭 상단의 <strong>📅 캘린더 내보내기</strong> 버튼을 누르면 .ics 파일이 다운로드돼요.</p>
       <p style="margin-bottom:4px;"><strong>아이폰:</strong> 파일 앱에서 .ics 파일 열기 → 캘린더 앱에 자동 추가</p>
       <p><strong>구글/노션 캘린더:</strong> 캘린더 설정 → URL로 캘린더 가져오기에서 파일 업로드</p>
+    </div>
+  </div>
+
+  <!-- FP (개인 재무관리) -->
+  <div id="fp" class="page">
+    <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span class="section-title" style="margin-bottom:0;">💰 개인 자산관리 (FP)</span>
+      <span style="font-size:12px;color:var(--text2);">자금계획을 미리 세워 자산을 안전하게 키우는 공간</span>
+    </div>
+
+    <!-- 요약 스탯 -->
+    <div class="card">
+      <div class="card-title">한눈에 보기</div>
+      <div class="stat-grid" id="fp-summary"></div>
+    </div>
+
+    <!-- 현재 보유 자산/현금 -->
+    <div class="card">
+      <div class="card-title">현재 보유 현금 · 비상금</div>
+      <div class="add-row">
+        <span style="font-size:13px;color:var(--text2);">현재 통장 잔고(투자 제외)</span>
+        <input type="text" id="fp-cash" inputmode="numeric" placeholder="0" style="flex:1;text-align:right;">
+        <span style="font-size:13px;color:var(--text2);">원</span>
+        <button class="btn btn-primary" onclick="fpSaveCash()">저장</button>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px;">
+        이 잔고를 시작점으로 12개월 현금흐름을 예측해요. 매월 수입 − 고정비 − 해당월 연간지출을 누적합니다.
+      </div>
+    </div>
+
+    <!-- 월 고정수입 -->
+    <div class="card">
+      <div class="card-title">월 고정수입</div>
+      <div id="fp-income-list"></div>
+      <div class="add-row" style="margin-top:12px;">
+        <input type="text" id="fp-inc-name" placeholder="항목 (예: 급여, 사업 정산)" style="flex:2;">
+        <input type="text" id="fp-inc-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
+        <button class="btn btn-primary" onclick="fpAddIncome()">추가</button>
+      </div>
+    </div>
+
+    <!-- 월 고정비 -->
+    <div class="card">
+      <div class="card-title">월 고정비</div>
+      <div id="fp-fixed-list"></div>
+      <div class="add-row" style="margin-top:12px;">
+        <input type="text" id="fp-fix-name" placeholder="항목 (예: 월세, 보험, 구독)" style="flex:2;">
+        <select id="fp-fix-cat" style="flex:none;">
+          <option value="주거">주거</option><option value="공과금">공과금</option>
+          <option value="보험">보험</option><option value="통신">통신</option>
+          <option value="구독">구독</option><option value="대출">대출상환</option>
+          <option value="생활">생활비</option><option value="기타">기타</option>
+        </select>
+        <input type="text" id="fp-fix-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
+        <button class="btn btn-primary" onclick="fpAddFixed()">추가</button>
+      </div>
+    </div>
+
+    <!-- 연간 주요 지출 -->
+    <div class="card">
+      <div class="card-title">연간 주요 지출 (목돈 · 비정기)</div>
+      <div id="fp-annual-list"></div>
+      <div class="add-row" style="margin-top:12px;">
+        <input type="text" id="fp-ann-name" placeholder="항목 (예: 자동차세, 가족여행, 명절)" style="flex:2;">
+        <select id="fp-ann-month" style="flex:none;">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+        <input type="text" id="fp-ann-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
+        <button class="btn btn-primary" onclick="fpAddAnnual()">추가</button>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px;">
+        💡 연간지출은 12로 나눠 매달 적립한다고 생각하면 빵꾸를 막을 수 있어요. (아래 '월 적립 권장액' 참고)
+      </div>
+    </div>
+
+    <!-- 저축/투자 목표 -->
+    <div class="card">
+      <div class="card-title">월 저축 · 투자 목표</div>
+      <div class="add-row">
+        <span style="font-size:13px;color:var(--text2);">매월 자산으로 옮길 금액</span>
+        <input type="text" id="fp-save-goal" inputmode="numeric" placeholder="0" style="flex:1;text-align:right;">
+        <span style="font-size:13px;color:var(--text2);">원</span>
+        <button class="btn btn-primary" onclick="fpSaveGoal()">저장</button>
+      </div>
+      <div id="fp-save-feedback" style="font-size:13px;margin-top:10px;"></div>
+    </div>
+
+    <!-- 12개월 현금흐름 예측 -->
+    <div class="card">
+      <div class="card-title">향후 12개월 현금흐름 예측</div>
+      <div id="fp-projection"></div>
     </div>
   </div>
 </div>
@@ -1701,6 +1818,166 @@ async function withSync(fn){
 }
 
 /* ============================================================
+   FP — 개인 자산관리 (localStorage 영구 저장, 기기 독립)
+============================================================ */
+var FP_KEY='fp_data_v1';
+var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[]};
+function fpLoad(){
+  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[]};}}catch(e){}
+}
+function fpSave(){try{localStorage.setItem(FP_KEY,JSON.stringify(fp));}catch(e){}}
+function fpNum(v){var n=parseInt(String(v).replace(/[^0-9-]/g,''),10);return isNaN(n)?0:n;}
+function won(n){return (n<0?'-':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR')+'원';}
+function wonShort(n){
+  var a=Math.abs(n);
+  if(a>=100000000)return (n<0?'-':'')+(a/100000000).toFixed(a%100000000===0?0:1)+'억';
+  if(a>=10000)return (n<0?'-':'')+Math.round(a/10000).toLocaleString('ko-KR')+'만';
+  return won(n);
+}
+function fpSum(arr){return arr.reduce(function(s,x){return s+(x.amt||0);},0);}
+
+function fpRenderAll(){
+  fpRenderSummary();
+  fpRenderIncome();
+  fpRenderFixed();
+  fpRenderAnnual();
+  fpRenderSaveFeedback();
+  fpRenderProjection();
+  /* 입력칸 현재값 반영 */
+  var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
+  var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
+}
+
+function fpRenderSummary(){
+  var inc=fpSum(fp.income), fix=fpSum(fp.fixed), annTotal=fpSum(fp.annual);
+  var annMonthly=annTotal/12;
+  var monthlyNet=inc-fix-annMonthly;          /* 연간지출 적립 반영 실질 여유 */
+  var el=document.getElementById('fp-summary');
+  el.innerHTML=
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(inc)+'</div><div class="fp-stat-label">월 수입</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(fix)+'</div><div class="fp-stat-label">월 고정비</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(annMonthly)+'</div><div class="fp-stat-label">연간지출 월적립 권장</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val '+(monthlyNet>=0?'pos':'neg')+'">'+wonShort(monthlyNet)+'</div><div class="fp-stat-label">월 실질 여유자금</div></div>';
+}
+
+function fpRenderIncome(){
+  var el=document.getElementById('fp-income-list');
+  if(fp.income.length===0){el.innerHTML='<div class="fp-empty">등록된 수입이 없습니다</div>';return;}
+  el.innerHTML=fp.income.map(function(x,i){
+    return '<div class="fp-row"><span class="fp-name">'+escHtml(x.name)+'</span>'+
+      '<span class="fp-amt">'+won(x.amt)+'</span>'+
+      '<button class="del-btn" onclick="fpDel(\'income\','+i+')">&#10005;</button></div>';
+  }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.income))+'</span><span style="width:18px;"></span></div>';
+}
+
+function fpRenderFixed(){
+  var el=document.getElementById('fp-fixed-list');
+  if(fp.fixed.length===0){el.innerHTML='<div class="fp-empty">등록된 고정비가 없습니다</div>';return;}
+  el.innerHTML=fp.fixed.map(function(x,i){
+    return '<div class="fp-row"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+      '<span class="fp-amt">'+won(x.amt)+'</span>'+
+      '<button class="del-btn" onclick="fpDel(\'fixed\','+i+')">&#10005;</button></div>';
+  }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.fixed))+'</span><span style="width:18px;"></span></div>';
+}
+
+function fpRenderAnnual(){
+  var el=document.getElementById('fp-annual-list');
+  if(fp.annual.length===0){el.innerHTML='<div class="fp-empty">등록된 연간 지출이 없습니다</div>';return;}
+  var sorted=fp.annual.map(function(x,i){return{x:x,i:i};}).sort(function(a,b){return (a.x.month||1)-(b.x.month||1);});
+  el.innerHTML=sorted.map(function(o){
+    return '<div class="fp-row"><span class="fp-mtag">'+(o.x.month||1)+'월</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
+      '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
+      '<button class="del-btn" onclick="fpDel(\'annual\','+o.i+')">&#10005;</button></div>';
+  }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">연 합계</span><span class="fp-amt">'+won(fpSum(fp.annual))+'</span><span style="width:18px;"></span></div>';
+}
+
+function fpRenderSaveFeedback(){
+  var el=document.getElementById('fp-save-feedback');if(!el)return;
+  var inc=fpSum(fp.income), fix=fpSum(fp.fixed), annMonthly=fpSum(fp.annual)/12;
+  var net=inc-fix-annMonthly;
+  var goal=fp.saveGoal||0;
+  if(goal<=0){el.innerHTML='<span style="color:var(--text2);">목표를 입력하면 달성 가능 여부를 알려드려요.</span>';return;}
+  if(net<=0){el.innerHTML='<span style="color:var(--meeting);">⚠️ 현재 월 실질 여유자금이 '+won(net)+'이라 저축 여력이 없어요. 고정비를 점검해 보세요.</span>';return;}
+  if(goal<=net){
+    el.innerHTML='<span style="color:var(--teal);">✅ 목표 '+won(goal)+' 저축 후에도 매월 '+won(net-goal)+' 남아요. 안정적입니다.</span>';
+  }else{
+    el.innerHTML='<span style="color:var(--coral);">⚠️ 목표가 여유자금('+won(net)+')보다 '+won(goal-net)+' 많아요. 매월 적자가 날 수 있으니 목표를 '+won(net)+' 이하로 조정하길 권해요.</span>';
+  }
+}
+
+function fpRenderProjection(){
+  var el=document.getElementById('fp-projection');
+  var inc=fpSum(fp.income), fix=fpSum(fp.fixed);
+  if(inc===0&&fix===0&&fp.annual.length===0){el.innerHTML='<div class="fp-empty">수입·고정비를 입력하면 12개월 예측이 표시됩니다</div>';return;}
+  var now=new Date();
+  var bal=fp.cash||0;
+  var html='';
+  var minBal=bal, minLabel='';
+  var rows=[];
+  for(var k=0;k<12;k++){
+    var d=new Date(now.getFullYear(),now.getMonth()+k,1);
+    var mLabel=(d.getFullYear()+'').slice(2)+'.'+pad(d.getMonth()+1);
+    var monthNum=d.getMonth()+1;
+    var annThis=fp.annual.filter(function(a){return (a.month||1)===monthNum;});
+    var annAmt=fpSum(annThis);
+    var flow=inc-fix-annAmt;
+    bal+=flow;
+    rows.push({label:mLabel,flow:flow,bal:bal,ann:annThis,annAmt:annAmt});
+    if(bal<minBal){minBal=bal;minLabel=mLabel;}
+  }
+  /* 경고 배너 */
+  var firstNeg=rows.find(function(r){return r.bal<0;});
+  if(firstNeg){
+    html+='<div style="background:var(--red-light);color:var(--red-dark);padding:10px 12px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:10px;">🚨 <strong>'+firstNeg.label+'</strong>월에 잔고가 마이너스('+won(firstNeg.bal)+')로 떨어져요. 미리 자금을 확보하거나 그 전 달들의 지출을 줄이세요.</div>';
+  }else{
+    var oneM=inc-fix;
+    html+='<div style="background:var(--green-light);color:var(--green-dark);padding:10px 12px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:10px;">✅ 12개월 내내 잔고가 플러스로 유지돼요. 최저 잔고는 '+(minLabel||'-')+'월 '+won(minBal)+'.</div>';
+  }
+  html+=rows.map(function(r){
+    var cls=r.bal<0?'warn':(r.bal<(inc-fix)?'tight':'');
+    var note='';
+    if(r.annAmt>0)note='<span class="proj-note">'+r.ann.map(function(a){return escHtml(a.name);}).join(', ')+' '+wonShort(r.annAmt)+'</span>';
+    var flowStr=(r.flow>=0?'+':'')+wonShort(r.flow);
+    return '<div class="proj-row '+cls+'"><span class="proj-month">'+r.label+'</span>'+
+      '<span class="proj-flow">월변동 '+flowStr+note+'</span>'+
+      '<span class="proj-bal '+(r.bal>=0?'pos':'neg')+'">'+won(r.bal)+'</span></div>';
+  }).join('');
+  el.innerHTML=html;
+}
+
+/* 입력 핸들러 */
+function fpSaveCash(){fp.cash=fpNum(document.getElementById('fp-cash').value);fpSave();fpRenderAll();}
+function fpSaveGoal(){fp.saveGoal=fpNum(document.getElementById('fp-save-goal').value);fpSave();fpRenderAll();}
+function fpAddIncome(){
+  var n=document.getElementById('fp-inc-name').value.trim();
+  var a=fpNum(document.getElementById('fp-inc-amt').value);
+  if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
+  fp.income.push({name:n,amt:a});fpSave();
+  document.getElementById('fp-inc-name').value='';document.getElementById('fp-inc-amt').value='';
+  fpRenderAll();
+}
+function fpAddFixed(){
+  var n=document.getElementById('fp-fix-name').value.trim();
+  var c=document.getElementById('fp-fix-cat').value;
+  var a=fpNum(document.getElementById('fp-fix-amt').value);
+  if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
+  fp.fixed.push({name:n,cat:c,amt:a});fpSave();
+  document.getElementById('fp-fix-name').value='';document.getElementById('fp-fix-amt').value='';
+  fpRenderAll();
+}
+function fpAddAnnual(){
+  var n=document.getElementById('fp-ann-name').value.trim();
+  var m=parseInt(document.getElementById('fp-ann-month').value,10);
+  var a=fpNum(document.getElementById('fp-ann-amt').value);
+  if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
+  fp.annual.push({name:n,month:m,amt:a});fpSave();
+  document.getElementById('fp-ann-name').value='';document.getElementById('fp-ann-amt').value='';
+  fpRenderAll();
+}
+function fpDel(kind,i){fp[kind].splice(i,1);fpSave();fpRenderAll();}
+fpLoad();
+
+/* ============================================================
    TAB & INIT
 ============================================================ */
 function goTab(id,btn){
@@ -1712,6 +1989,7 @@ function goTab(id,btn){
   if(id==='tasks'){renderDailyTasks();renderWeeklyTasks();renderMonthlyTasks();}
   if(id==='goals'){renderGoals();}
   if(id==='trips'){renderTrips();}
+  if(id==='fp'){fpRenderAll();}
   if(id==='dash'){renderDashboard();}
 }
 
