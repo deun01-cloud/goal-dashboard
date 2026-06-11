@@ -40,6 +40,21 @@
   .stat-label { font-size: 11px; color: var(--text2); margin-top: 3px; }
   /* FP */
   .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .fp-subtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .fp-subtab{padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--border2);color:var(--text2);background:transparent;font-family:inherit;}
+  .fp-subtab:hover{background:var(--bg2);}
+  .fp-subtab.active{background:var(--purple-light);border-color:var(--purple);color:var(--purple-dark);font-weight:600;}
+  .fp-sub{display:none;} .fp-sub.active{display:block;}
+  .fp-inline{display:flex;align-items:center;gap:8px;}
+  .fp-add{display:flex;gap:6px;margin-top:12px;align-items:center;flex-wrap:wrap;}
+  .fp-name-in{flex:1;min-width:120px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;}
+  .fp-name-in:focus,.fp-amt-in:focus,.fp-rate-in:focus{border-color:var(--purple);}
+  .fp-amt-in{width:110px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;text-align:right;}
+  .fp-rate-in{width:64px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 8px;font-size:13px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;text-align:right;}
+  .fp-sel{border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 6px;font-size:13px;color:var(--text);background:var(--bg);outline:none;cursor:pointer;font-family:inherit;flex:none;}
+  .fp-unit{font-size:13px;color:var(--text2);}
+  .fp-btn-sm{padding:7px 14px;font-size:13px;flex:none;}
+  .fp-hint{font-size:12px;color:var(--text2);margin-top:8px;}
   .fp-stat{background:var(--bg2);border-radius:var(--radius-sm);padding:12px 14px;}
   .fp-stat-val{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;}
   .fp-stat-val.pos{color:var(--teal);} .fp-stat-val.neg{color:var(--meeting);}
@@ -441,90 +456,147 @@
       <span style="font-size:12px;color:var(--text2);">자금계획을 미리 세워 자산을 안전하게 키우는 공간</span>
     </div>
 
-    <!-- 요약 스탯 -->
-    <div class="card">
-      <div class="card-title">한눈에 보기</div>
-      <div class="stat-grid" id="fp-summary"></div>
+    <!-- 서브탭 -->
+    <div class="fp-subtabs">
+      <button class="fp-subtab active" onclick="fpSub('overview',this)">📊 한눈에</button>
+      <button class="fp-subtab" onclick="fpSub('cashflow',this)">🔄 현금흐름</button>
+      <button class="fp-subtab" onclick="fpSub('networth',this)">🏦 순자산</button>
+      <button class="fp-subtab" onclick="fpSub('plan',this)">🎯 계획</button>
     </div>
 
-    <!-- 현재 보유 자산/현금 -->
-    <div class="card">
-      <div class="card-title">현재 보유 현금 · 비상금</div>
-      <div class="add-row">
-        <span style="font-size:13px;color:var(--text2);">현재 통장 잔고(투자 제외)</span>
-        <input type="text" id="fp-cash" inputmode="numeric" placeholder="0" style="flex:1;text-align:right;">
-        <span style="font-size:13px;color:var(--text2);">원</span>
-        <button class="btn btn-primary" onclick="fpSaveCash()">저장</button>
+    <!-- ===== 한눈에 ===== -->
+    <div id="fp-overview" class="fp-sub active">
+      <div class="card">
+        <div class="card-title">한눈에 보기</div>
+        <div class="stat-grid" id="fp-summary"></div>
       </div>
-      <div style="font-size:12px;color:var(--text2);margin-top:8px;">
-        이 잔고를 시작점으로 12개월 현금흐름을 예측해요. 매월 수입 − 고정비 − 해당월 연간지출을 누적합니다.
-      </div>
-    </div>
-
-    <!-- 월 고정수입 -->
-    <div class="card">
-      <div class="card-title">월 고정수입</div>
-      <div id="fp-income-list"></div>
-      <div class="add-row" style="margin-top:12px;">
-        <input type="text" id="fp-inc-name" placeholder="항목 (예: 급여, 사업 정산)" style="flex:2;">
-        <input type="text" id="fp-inc-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
-        <button class="btn btn-primary" onclick="fpAddIncome()">추가</button>
+      <div class="card">
+        <div class="card-title">재무 건전성 진단</div>
+        <div id="fp-health"></div>
       </div>
     </div>
 
-    <!-- 월 고정비 -->
-    <div class="card">
-      <div class="card-title">월 고정비</div>
-      <div id="fp-fixed-list"></div>
-      <div class="add-row" style="margin-top:12px;">
-        <input type="text" id="fp-fix-name" placeholder="항목 (예: 월세, 보험, 구독)" style="flex:2;">
-        <select id="fp-fix-cat" style="flex:none;">
-          <option value="주거">주거</option><option value="공과금">공과금</option>
-          <option value="보험">보험</option><option value="통신">통신</option>
-          <option value="구독">구독</option><option value="대출">대출상환</option>
-          <option value="생활">생활비</option><option value="기타">기타</option>
-        </select>
-        <input type="text" id="fp-fix-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
-        <button class="btn btn-primary" onclick="fpAddFixed()">추가</button>
+    <!-- ===== 현금흐름 (수입/고정비/연간지출/현금) ===== -->
+    <div id="fp-cashflow" class="fp-sub">
+      <!-- 현재 현금 -->
+      <div class="card">
+        <div class="card-title">현재 보유 현금 (비상금 · 투자 제외)</div>
+        <div class="fp-inline">
+          <input type="text" id="fp-cash" inputmode="numeric" placeholder="0" class="fp-amt-in">
+          <span class="fp-unit">원</span>
+          <button class="btn btn-primary fp-btn-sm" onclick="fpSaveCash()">저장</button>
+        </div>
+        <div class="fp-hint">이 잔고를 시작점으로 아래 항목들로 12개월 현금흐름을 예측합니다.</div>
+      </div>
+
+      <!-- 월 고정수입 -->
+      <div class="card">
+        <div class="card-title">월 고정수입</div>
+        <div id="fp-income-list"></div>
+        <div class="fp-add">
+          <input type="text" id="fp-inc-name" placeholder="항목 (급여 등)" class="fp-name-in">
+          <input type="text" id="fp-inc-amt" inputmode="numeric" placeholder="금액" class="fp-amt-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddIncome()">추가</button>
+        </div>
+      </div>
+
+      <!-- 월 고정비 -->
+      <div class="card">
+        <div class="card-title">월 고정비</div>
+        <div id="fp-fixed-list"></div>
+        <div class="fp-add">
+          <select id="fp-fix-cat" class="fp-sel">
+            <option value="주거">주거</option><option value="공과금">공과금</option>
+            <option value="보험">보험</option><option value="통신">통신</option>
+            <option value="구독">구독</option><option value="대출">대출</option>
+            <option value="생활">생활</option><option value="기타">기타</option>
+          </select>
+          <input type="text" id="fp-fix-name" placeholder="항목 (월세 등)" class="fp-name-in">
+          <input type="text" id="fp-fix-amt" inputmode="numeric" placeholder="금액" class="fp-amt-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddFixed()">추가</button>
+        </div>
+      </div>
+
+      <!-- 연간 주요 지출 -->
+      <div class="card">
+        <div class="card-title">연간 주요 지출 (목돈 · 비정기)</div>
+        <div id="fp-annual-list"></div>
+        <div class="fp-add">
+          <select id="fp-ann-month" class="fp-sel">
+            <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+            <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+            <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+            <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+          </select>
+          <input type="text" id="fp-ann-name" placeholder="항목 (자동차세 등)" class="fp-name-in">
+          <input type="text" id="fp-ann-amt" inputmode="numeric" placeholder="금액" class="fp-amt-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddAnnual()">추가</button>
+        </div>
+        <div class="fp-hint">💡 연간지출을 12로 나눠 매달 적립한다고 생각하면 목돈 빵꾸를 막을 수 있어요.</div>
       </div>
     </div>
 
-    <!-- 연간 주요 지출 -->
-    <div class="card">
-      <div class="card-title">연간 주요 지출 (목돈 · 비정기)</div>
-      <div id="fp-annual-list"></div>
-      <div class="add-row" style="margin-top:12px;">
-        <input type="text" id="fp-ann-name" placeholder="항목 (예: 자동차세, 가족여행, 명절)" style="flex:2;">
-        <select id="fp-ann-month" style="flex:none;">
-          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
-          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
-          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
-          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
-        </select>
-        <input type="text" id="fp-ann-amt" inputmode="numeric" placeholder="금액(원)" style="flex:1;text-align:right;">
-        <button class="btn btn-primary" onclick="fpAddAnnual()">추가</button>
+    <!-- ===== 순자산 (자산/부채) ===== -->
+    <div id="fp-networth" class="fp-sub">
+      <div class="card">
+        <div class="card-title">순자산 요약</div>
+        <div class="stat-grid" id="fp-nw-summary"></div>
       </div>
-      <div style="font-size:12px;color:var(--text2);margin-top:8px;">
-        💡 연간지출은 12로 나눠 매달 적립한다고 생각하면 빵꾸를 막을 수 있어요. (아래 '월 적립 권장액' 참고)
+
+      <!-- 보유 자산 -->
+      <div class="card">
+        <div class="card-title">보유 자산 (현금 · 투자 · 부동산 등)</div>
+        <div id="fp-asset-list"></div>
+        <div class="fp-add">
+          <select id="fp-as-cat" class="fp-sel">
+            <option value="예적금">예적금</option><option value="주식">주식</option>
+            <option value="금/실물">금/실물</option><option value="부동산">부동산</option>
+            <option value="연금">연금</option><option value="기타">기타</option>
+          </select>
+          <input type="text" id="fp-as-name" placeholder="항목 (삼성전자 등)" class="fp-name-in">
+          <input type="text" id="fp-as-amt" inputmode="numeric" placeholder="평가액" class="fp-amt-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddAsset()">추가</button>
+        </div>
+      </div>
+
+      <!-- 부채 -->
+      <div class="card">
+        <div class="card-title">부채 (대출 · 카드 등)</div>
+        <div id="fp-debt-list"></div>
+        <div class="fp-add">
+          <input type="text" id="fp-debt-name" placeholder="항목 (주담대 등)" class="fp-name-in">
+          <input type="text" id="fp-debt-amt" inputmode="numeric" placeholder="잔액" class="fp-amt-in">
+          <input type="text" id="fp-debt-rate" inputmode="decimal" placeholder="금리%" class="fp-rate-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddDebt()">추가</button>
+        </div>
+        <div class="fp-hint">금리는 선택사항이에요. 입력하면 연 이자 부담을 함께 계산해 드려요.</div>
       </div>
     </div>
 
-    <!-- 저축/투자 목표 -->
-    <div class="card">
-      <div class="card-title">월 저축 · 투자 목표</div>
-      <div class="add-row">
-        <span style="font-size:13px;color:var(--text2);">매월 자산으로 옮길 금액</span>
-        <input type="text" id="fp-save-goal" inputmode="numeric" placeholder="0" style="flex:1;text-align:right;">
-        <span style="font-size:13px;color:var(--text2);">원</span>
-        <button class="btn btn-primary" onclick="fpSaveGoal()">저장</button>
+    <!-- ===== 계획 (목표 + 예측) ===== -->
+    <div id="fp-plan" class="fp-sub">
+      <!-- 월 저축 목표 -->
+      <div class="card">
+        <div class="card-title">월 저축 · 투자 목표</div>
+        <div class="fp-inline">
+          <input type="text" id="fp-save-goal" inputmode="numeric" placeholder="0" class="fp-amt-in">
+          <span class="fp-unit">원</span>
+          <button class="btn btn-primary fp-btn-sm" onclick="fpSaveGoal()">저장</button>
+        </div>
+        <div id="fp-save-feedback" style="font-size:13px;margin-top:10px;"></div>
       </div>
-      <div id="fp-save-feedback" style="font-size:13px;margin-top:10px;"></div>
-    </div>
 
-    <!-- 12개월 현금흐름 예측 -->
-    <div class="card">
-      <div class="card-title">향후 12개월 현금흐름 예측</div>
-      <div id="fp-projection"></div>
+      <!-- 비상금 -->
+      <div class="card">
+        <div class="card-title">비상금 적정성</div>
+        <div id="fp-emergency"></div>
+      </div>
+
+      <!-- 12개월 예측 -->
+      <div class="card">
+        <div class="card-title">향후 12개월 현금흐름 예측</div>
+        <div id="fp-projection"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1821,12 +1893,13 @@ async function withSync(fn){
    FP — 개인 자산관리 (localStorage 영구 저장, 기기 독립)
 ============================================================ */
 var FP_KEY='fp_data_v1';
-var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[]};
+var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[]};
 function fpLoad(){
-  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[]};}}catch(e){}
+  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[]};}}catch(e){}
 }
 function fpSave(){try{localStorage.setItem(FP_KEY,JSON.stringify(fp));}catch(e){}}
 function fpNum(v){var n=parseInt(String(v).replace(/[^0-9-]/g,''),10);return isNaN(n)?0:n;}
+function fpFloat(v){var n=parseFloat(String(v).replace(/[^0-9.]/g,''));return isNaN(n)?0:n;}
 function won(n){return (n<0?'-':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR')+'원';}
 function wonShort(n){
   var a=Math.abs(n);
@@ -1835,13 +1908,36 @@ function wonShort(n){
   return won(n);
 }
 function fpSum(arr){return arr.reduce(function(s,x){return s+(x.amt||0);},0);}
+/* 핵심 지표 한 번에 계산 */
+function fpMetrics(){
+  var inc=fpSum(fp.income), fix=fpSum(fp.fixed), annTotal=fpSum(fp.annual);
+  var annMonthly=annTotal/12;
+  var net=inc-fix-annMonthly;                 /* 월 실질 여유자금 */
+  var assets=fpSum(fp.assets), debts=fpSum(fp.debts);
+  var netWorth=fp.cash+assets-debts;
+  var savingsRate=inc>0?(net/inc*100):0;
+  return{inc:inc,fix:fix,annTotal:annTotal,annMonthly:annMonthly,net:net,assets:assets,debts:debts,netWorth:netWorth,savingsRate:savingsRate};
+}
+
+/* 서브탭 전환 */
+function fpSub(id,btn){
+  document.querySelectorAll('.fp-sub').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.fp-subtab').forEach(function(b){b.classList.remove('active');});
+  var el=document.getElementById('fp-'+id);if(el)el.classList.add('active');
+  if(btn)btn.classList.add('active');
+}
 
 function fpRenderAll(){
   fpRenderSummary();
+  fpRenderHealth();
   fpRenderIncome();
   fpRenderFixed();
   fpRenderAnnual();
+  fpRenderAssets();
+  fpRenderDebts();
+  fpRenderNwSummary();
   fpRenderSaveFeedback();
+  fpRenderEmergency();
   fpRenderProjection();
   /* 입력칸 현재값 반영 */
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
@@ -1849,15 +1945,45 @@ function fpRenderAll(){
 }
 
 function fpRenderSummary(){
-  var inc=fpSum(fp.income), fix=fpSum(fp.fixed), annTotal=fpSum(fp.annual);
-  var annMonthly=annTotal/12;
-  var monthlyNet=inc-fix-annMonthly;          /* 연간지출 적립 반영 실질 여유 */
+  var m=fpMetrics();
   var el=document.getElementById('fp-summary');
   el.innerHTML=
-    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(inc)+'</div><div class="fp-stat-label">월 수입</div></div>'+
-    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(fix)+'</div><div class="fp-stat-label">월 고정비</div></div>'+
-    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(annMonthly)+'</div><div class="fp-stat-label">연간지출 월적립 권장</div></div>'+
-    '<div class="fp-stat"><div class="fp-stat-val '+(monthlyNet>=0?'pos':'neg')+'">'+wonShort(monthlyNet)+'</div><div class="fp-stat-label">월 실질 여유자금</div></div>';
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.inc)+'</div><div class="fp-stat-label">월 수입</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.fix)+'</div><div class="fp-stat-label">월 고정비</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val '+(m.net>=0?'pos':'neg')+'">'+wonShort(m.net)+'</div><div class="fp-stat-label">월 실질 여유자금</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val '+(m.netWorth>=0?'pos':'neg')+'">'+wonShort(m.netWorth)+'</div><div class="fp-stat-label">순자산</div></div>';
+}
+
+/* 재무 건전성 진단 */
+function fpRenderHealth(){
+  var el=document.getElementById('fp-health');if(!el)return;
+  var m=fpMetrics();
+  if(m.inc===0){el.innerHTML='<div class="fp-empty">수입을 입력하면 진단이 표시됩니다</div>';return;}
+  var rows=[];
+  /* 저축률 */
+  var sr=m.savingsRate;
+  var srColor=sr>=30?'teal':sr>=15?'amber':'meeting';
+  var srMsg=sr>=30?'아주 우수해요':sr>=15?'양호하지만 더 올릴 여지가 있어요':sr>=0?'저축 여력이 빠듯해요. 지출 점검이 필요해요':'적자 상태예요. 고정비부터 줄이세요';
+  rows.push({label:'저축률',val:sr.toFixed(0)+'%',color:srColor,msg:srMsg});
+  /* 고정비 비율 */
+  var fixRatio=m.inc>0?(m.fix/m.inc*100):0;
+  var fxColor=fixRatio<=50?'teal':fixRatio<=70?'amber':'meeting';
+  var fxMsg=fixRatio<=50?'건전해요':fixRatio<=70?'다소 높아요':'고정비 부담이 큽니다';
+  rows.push({label:'고정비/수입',val:fixRatio.toFixed(0)+'%',color:fxColor,msg:fxMsg});
+  /* 부채 비율 (총부채/연수입) */
+  if(m.debts>0){
+    var annualInc=m.inc*12;
+    var dRatio=annualInc>0?(m.debts/annualInc*100):0;
+    var dColor=dRatio<=100?'teal':dRatio<=200?'amber':'meeting';
+    var dMsg=dRatio<=100?'관리 가능 수준':dRatio<=200?'주의 필요':'부채 비중이 높아요';
+    rows.push({label:'총부채/연수입',val:dRatio.toFixed(0)+'%',color:dColor,msg:dMsg});
+  }
+  el.innerHTML=rows.map(function(r){
+    var c=r.color==='teal'?'var(--teal)':r.color==='amber'?'var(--coral)':'var(--meeting)';
+    return '<div class="fp-row"><span class="fp-name" style="font-weight:600;">'+r.label+'</span>'+
+      '<span class="fp-amt" style="color:'+c+';">'+r.val+'</span>'+
+      '<span style="flex:1.6;font-size:12px;color:var(--text2);text-align:right;">'+r.msg+'</span></div>';
+  }).join('');
 }
 
 function fpRenderIncome(){
@@ -1889,6 +2015,58 @@ function fpRenderAnnual(){
       '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
       '<button class="del-btn" onclick="fpDel(\'annual\','+o.i+')">&#10005;</button></div>';
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">연 합계</span><span class="fp-amt">'+won(fpSum(fp.annual))+'</span><span style="width:18px;"></span></div>';
+}
+
+function fpRenderAssets(){
+  var el=document.getElementById('fp-asset-list');if(!el)return;
+  if(fp.assets.length===0){el.innerHTML='<div class="fp-empty">등록된 자산이 없습니다</div>';return;}
+  el.innerHTML=fp.assets.map(function(x,i){
+    return '<div class="fp-row"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+      '<span class="fp-amt">'+won(x.amt)+'</span>'+
+      '<button class="del-btn" onclick="fpDel(\'assets\','+i+')">&#10005;</button></div>';
+  }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">자산 합계(현금 제외)</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.assets))+'</span><span style="width:18px;"></span></div>';
+}
+
+function fpRenderDebts(){
+  var el=document.getElementById('fp-debt-list');if(!el)return;
+  if(fp.debts.length===0){el.innerHTML='<div class="fp-empty">등록된 부채가 없습니다</div>';return;}
+  var totalInterest=fp.debts.reduce(function(s,d){return s+(d.amt*((d.rate||0)/100));},0);
+  el.innerHTML=fp.debts.map(function(x,i){
+    var rateTag=x.rate?'<span class="fp-cat">'+x.rate+'%</span>':'';
+    return '<div class="fp-row">'+rateTag+'<span class="fp-name">'+escHtml(x.name)+'</span>'+
+      '<span class="fp-amt" style="color:var(--meeting);">'+won(x.amt)+'</span>'+
+      '<button class="del-btn" onclick="fpDel(\'debts\','+i+')">&#10005;</button></div>';
+  }).join('')+
+  '<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">부채 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.debts))+'</span><span style="width:18px;"></span></div>'+
+  (totalInterest>0?'<div class="fp-row"><span class="fp-name" style="font-size:12px;color:var(--text2);">예상 연 이자 부담</span><span class="fp-amt" style="font-size:13px;color:var(--coral);">'+won(totalInterest)+' (월 '+wonShort(totalInterest/12)+')</span><span style="width:18px;"></span></div>':'');
+}
+
+function fpRenderNwSummary(){
+  var el=document.getElementById('fp-nw-summary');if(!el)return;
+  var m=fpMetrics();
+  el.innerHTML=
+    '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(fp.cash+m.assets)+'</div><div class="fp-stat-label">총 자산 (현금+투자)</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val neg">'+wonShort(m.debts)+'</div><div class="fp-stat-label">총 부채</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val '+(m.netWorth>=0?'pos':'neg')+'">'+wonShort(m.netWorth)+'</div><div class="fp-stat-label">순자산</div></div>'+
+    '<div class="fp-stat"><div class="fp-stat-val">'+(m.assets+fp.cash>0?Math.round(m.debts/(m.assets+fp.cash)*100):0)+'%</div><div class="fp-stat-label">부채/자산 비율</div></div>';
+}
+
+function fpRenderEmergency(){
+  var el=document.getElementById('fp-emergency');if(!el)return;
+  var m=fpMetrics();
+  var monthlyOut=m.fix+m.annMonthly;
+  if(monthlyOut<=0){el.innerHTML='<div class="fp-empty">고정비를 입력하면 적정 비상금을 계산합니다</div>';return;}
+  var rec3=monthlyOut*3, rec6=monthlyOut*6;
+  var cash=fp.cash;
+  var months=monthlyOut>0?(cash/monthlyOut):0;
+  var status,color;
+  if(cash>=rec6){status='✅ 충분해요 ('+months.toFixed(1)+'개월치 보유). 초과분은 투자로 돌려도 좋아요.';color='var(--teal)';}
+  else if(cash>=rec3){status='🟡 적정 범위예요 ('+months.toFixed(1)+'개월치). 6개월치('+wonShort(rec6)+')까지 채우면 더 안정적이에요.';color='var(--coral)';}
+  else{status='⚠️ 부족해요 ('+months.toFixed(1)+'개월치). 최소 3개월치('+wonShort(rec3)+')를 우선 확보하세요.';color='var(--meeting)';}
+  el.innerHTML=
+    '<div class="fp-row"><span class="fp-name">권장 비상금 (3~6개월)</span><span class="fp-amt">'+wonShort(rec3)+' ~ '+wonShort(rec6)+'</span></div>'+
+    '<div class="fp-row"><span class="fp-name">현재 보유 현금</span><span class="fp-amt">'+won(cash)+'</span></div>'+
+    '<div style="font-size:13px;color:'+color+';margin-top:10px;">'+status+'</div>';
 }
 
 function fpRenderSaveFeedback(){
@@ -1972,6 +2150,24 @@ function fpAddAnnual(){
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
   fp.annual.push({name:n,month:m,amt:a});fpSave();
   document.getElementById('fp-ann-name').value='';document.getElementById('fp-ann-amt').value='';
+  fpRenderAll();
+}
+function fpAddAsset(){
+  var n=document.getElementById('fp-as-name').value.trim();
+  var c=document.getElementById('fp-as-cat').value;
+  var a=fpNum(document.getElementById('fp-as-amt').value);
+  if(!n||a<=0){alert('항목명과 평가액을 입력하세요');return;}
+  fp.assets.push({name:n,cat:c,amt:a});fpSave();
+  document.getElementById('fp-as-name').value='';document.getElementById('fp-as-amt').value='';
+  fpRenderAll();
+}
+function fpAddDebt(){
+  var n=document.getElementById('fp-debt-name').value.trim();
+  var a=fpNum(document.getElementById('fp-debt-amt').value);
+  var r=fpFloat(document.getElementById('fp-debt-rate').value);
+  if(!n||a<=0){alert('항목명과 잔액을 입력하세요');return;}
+  fp.debts.push({name:n,amt:a,rate:r});fpSave();
+  document.getElementById('fp-debt-name').value='';document.getElementById('fp-debt-amt').value='';document.getElementById('fp-debt-rate').value='';
   fpRenderAll();
 }
 function fpDel(kind,i){fp[kind].splice(i,1);fpSave();fpRenderAll();}
