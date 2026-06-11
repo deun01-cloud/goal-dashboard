@@ -649,7 +649,8 @@ var DB = {
   weekly:  '4d11f07e-af50-4907-92b1-d271e9697735',
   monthly: '74a5bc52-bfe2-4d69-9a55-9bed245fbdaf',
   goals:   '3765e663-3065-4a2f-b521-ed017eb3d1d2',
-  trips:   '5c4bf5d4-afd9-4f62-9952-23bec5cda3f6'
+  trips:   '5c4bf5d4-afd9-4f62-9952-23bec5cda3f6',
+  fp:      '60766992-bc30-4500-b486-58ad0ba2380b'
 };
 
 /* ============================================================
@@ -880,6 +881,8 @@ async function loadAll(){
     checkWeeklyCarryOver();
     checkMonthlyCarryOver();
     renderAll();
+    /* FP 데이터도 노션에서 로드 (실패해도 메인 로드에 영향 없음) */
+    fpLoadFromNotion();
   }catch(e){
     setSync('error','연동 오류: '+e.message);
     diag('❌ 로드 실패: '+e.message,'#f00');
@@ -1890,14 +1893,101 @@ async function withSync(fn){
 }
 
 /* ============================================================
-   FP — 개인 자산관리 (localStorage 영구 저장, 기기 독립)
+   FP — 개인 자산관리 (노션 DB 연동 + localStorage 캐시)
+   노션이 master. 한 DB에 '구분' 필드로 수입/고정비/연간지출/자산/부채/설정 통합.
 ============================================================ */
 var FP_KEY='fp_data_v1';
 var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[]};
+/* 구분(노션) ↔ fp 배열 키 매핑 */
+var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채'};
+var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts'};
 function fpLoad(){
   try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[]};}}catch(e){}
 }
 function fpSave(){try{localStorage.setItem(FP_KEY,JSON.stringify(fp));}catch(e){}}
+
+/* 노션에서 FP 데이터 로드 (loadAll에서 호출) */
+async function fpLoadFromNotion(){
+  if(!DB.fp)return;
+  var rows;
+  try{rows=await queryDB(DB.fp);}catch(e){diag('⚠ FP 로드 실패: '+e.message,'#f80');return;}
+  var next={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[]};
+  var cashId=null,goalId=null;
+  rows.forEach(function(p){
+    var pr=p.properties;
+    var div=rSelect(pr,'구분');
+    var name=rTitle(pr,'이름');
+    var amt=rNumber(pr,'금액');
+    var cat=rSelect(pr,'카테고리');
+    var month=rNumber(pr,'월');
+    var rate=rNumber(pr,'금리');
+    if(div==='설정'){
+      if(name==='현금'){next.cash=amt;cashId=p.id;}
+      else if(name==='저축목표'){next.saveGoal=amt;goalId=p.id;}
+      return;
+    }
+    var key=FP_DIV_REV[div];
+    if(!key)return;
+    var item={_nid:p.id,name:name,amt:amt};
+    if(key==='fixed'||key==='assets')item.cat=cat||'기타';
+    if(key==='annual')item.month=month||1;
+    if(key==='debts')item.rate=rate||0;
+    next[key].push(item);
+  });
+  fp=next; fp._cashId=cashId; fp._goalId=goalId;
+  /* 기존 localStorage 데이터가 노션에 없으면 1회 마이그레이션 */
+  await fpMigrateLocal();
+  fpSave();
+  /* FP 탭이 열려있으면 다시 렌더 */
+  if(document.getElementById('fp')&&document.getElementById('fp').classList.contains('active'))fpRenderAll();
+}
+
+/* localStorage에만 있던 데이터를 노션으로 1회 업로드 */
+async function fpMigrateLocal(){
+  try{
+    var raw=localStorage.getItem(FP_KEY);
+    if(!raw)return;
+    var old=JSON.parse(raw);
+    if(!old)return;
+    /* 노션 항목과 name+amt 키로 중복 비교 */
+    var keys={};
+    ['income','fixed','annual','assets','debts'].forEach(function(k){
+      (fp[k]||[]).forEach(function(x){keys[k+'|'+x.name+'|'+x.amt]=true;});
+    });
+    var migrated=false;
+    var lists=['income','fixed','annual','assets','debts'];
+    for(var li=0;li<lists.length;li++){
+      var k=lists[li];
+      var arr=old[k]||[];
+      for(var i=0;i<arr.length;i++){
+        var x=arr[i];
+        if(!x||!x.name||x._nid)continue;             /* 이미 노션 id 있으면 skip */
+        if(keys[k+'|'+x.name+'|'+x.amt])continue;     /* 노션에 이미 동일 항목 있음 */
+        var nid=await fpCreateNotion(k,x);
+        x._nid=nid; fp[k].push(x); migrated=true;
+      }
+    }
+    /* 설정값(현금/저축목표) 마이그레이션 */
+    if(old.cash&&!fp._cashId){fp.cash=old.cash;fp._cashId=await fpUpsertSetting('현금',old.cash,null);migrated=true;}
+    if(old.saveGoal&&!fp._goalId){fp.saveGoal=old.saveGoal;fp._goalId=await fpUpsertSetting('저축목표',old.saveGoal,null);migrated=true;}
+    if(migrated)diag('✓ FP localStorage → 노션 마이그레이션 완료','#0f0');
+  }catch(e){diag('⚠ FP 마이그레이션 실패: '+e.message,'#f80');}
+}
+
+/* 노션에 FP 항목 페이지 생성 → page id 반환 */
+async function fpCreateNotion(kind,item){
+  var props={'이름':pTitle(item.name||''),'구분':pSelect(FP_DIV[kind]),'금액':pNumber(item.amt||0)};
+  if((kind==='fixed'||kind==='assets')&&item.cat)props['카테고리']=pSelect(item.cat);
+  if(kind==='annual')props['월']=pNumber(item.month||1);
+  if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
+  return await createPage(DB.fp,props);
+}
+
+/* 설정값(현금/저축목표) upsert: 기존 id 있으면 update, 없으면 create */
+async function fpUpsertSetting(name,amt,existingId){
+  if(existingId){await updatePage(existingId,{'금액':pNumber(amt)});return existingId;}
+  return await createPage(DB.fp,{'이름':pTitle(name),'구분':pSelect('설정'),'금액':pNumber(amt)});
+}
 function fpNum(v){var n=parseInt(String(v).replace(/[^0-9-]/g,''),10);return isNaN(n)?0:n;}
 function fpFloat(v){var n=parseFloat(String(v).replace(/[^0-9.]/g,''));return isNaN(n)?0:n;}
 function won(n){return (n<0?'-':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR')+'원';}
@@ -1925,6 +2015,16 @@ function fpSub(id,btn){
   document.querySelectorAll('.fp-subtab').forEach(function(b){b.classList.remove('active');});
   var el=document.getElementById('fp-'+id);if(el)el.classList.add('active');
   if(btn)btn.classList.add('active');
+  try{localStorage.setItem('fp_subtab',id);}catch(e){}
+}
+/* 새로고침 시 마지막 FP 서브탭 복원 */
+function fpRestoreSub(){
+  var id;try{id=localStorage.getItem('fp_subtab');}catch(e){}
+  if(!id||!document.getElementById('fp-'+id))return;
+  var btn=Array.prototype.slice.call(document.querySelectorAll('.fp-subtab')).find(function(b){
+    return b.getAttribute('onclick')&&b.getAttribute('onclick').indexOf("'"+id+"'")>=0;
+  });
+  fpSub(id,btn);
 }
 
 function fpRenderAll(){
@@ -2123,54 +2223,69 @@ function fpRenderProjection(){
   el.innerHTML=html;
 }
 
-/* 입력 핸들러 */
-function fpSaveCash(){fp.cash=fpNum(document.getElementById('fp-cash').value);fpSave();fpRenderAll();}
-function fpSaveGoal(){fp.saveGoal=fpNum(document.getElementById('fp-save-goal').value);fpSave();fpRenderAll();}
+/* 입력 핸들러 — 노션에 즉시 반영 */
+function fpSaveCash(){
+  fp.cash=fpNum(document.getElementById('fp-cash').value);fpSave();fpRenderAll();
+  withSync(async function(){fp._cashId=await fpUpsertSetting('현금',fp.cash,fp._cashId);});
+}
+function fpSaveGoal(){
+  fp.saveGoal=fpNum(document.getElementById('fp-save-goal').value);fpSave();fpRenderAll();
+  withSync(async function(){fp._goalId=await fpUpsertSetting('저축목표',fp.saveGoal,fp._goalId);});
+}
 function fpAddIncome(){
   var n=document.getElementById('fp-inc-name').value.trim();
   var a=fpNum(document.getElementById('fp-inc-amt').value);
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  fp.income.push({name:n,amt:a});fpSave();
+  var item={name:n,amt:a};fp.income.push(item);fpSave();
   document.getElementById('fp-inc-name').value='';document.getElementById('fp-inc-amt').value='';
   fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('income',item);});
 }
 function fpAddFixed(){
   var n=document.getElementById('fp-fix-name').value.trim();
   var c=document.getElementById('fp-fix-cat').value;
   var a=fpNum(document.getElementById('fp-fix-amt').value);
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  fp.fixed.push({name:n,cat:c,amt:a});fpSave();
+  var item={name:n,cat:c,amt:a};fp.fixed.push(item);fpSave();
   document.getElementById('fp-fix-name').value='';document.getElementById('fp-fix-amt').value='';
   fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('fixed',item);});
 }
 function fpAddAnnual(){
   var n=document.getElementById('fp-ann-name').value.trim();
   var m=parseInt(document.getElementById('fp-ann-month').value,10);
   var a=fpNum(document.getElementById('fp-ann-amt').value);
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  fp.annual.push({name:n,month:m,amt:a});fpSave();
+  var item={name:n,month:m,amt:a};fp.annual.push(item);fpSave();
   document.getElementById('fp-ann-name').value='';document.getElementById('fp-ann-amt').value='';
   fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('annual',item);});
 }
 function fpAddAsset(){
   var n=document.getElementById('fp-as-name').value.trim();
   var c=document.getElementById('fp-as-cat').value;
   var a=fpNum(document.getElementById('fp-as-amt').value);
   if(!n||a<=0){alert('항목명과 평가액을 입력하세요');return;}
-  fp.assets.push({name:n,cat:c,amt:a});fpSave();
+  var item={name:n,cat:c,amt:a};fp.assets.push(item);fpSave();
   document.getElementById('fp-as-name').value='';document.getElementById('fp-as-amt').value='';
   fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('assets',item);});
 }
 function fpAddDebt(){
   var n=document.getElementById('fp-debt-name').value.trim();
   var a=fpNum(document.getElementById('fp-debt-amt').value);
   var r=fpFloat(document.getElementById('fp-debt-rate').value);
   if(!n||a<=0){alert('항목명과 잔액을 입력하세요');return;}
-  fp.debts.push({name:n,amt:a,rate:r});fpSave();
+  var item={name:n,amt:a,rate:r};fp.debts.push(item);fpSave();
   document.getElementById('fp-debt-name').value='';document.getElementById('fp-debt-amt').value='';document.getElementById('fp-debt-rate').value='';
   fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('debts',item);});
 }
-function fpDel(kind,i){fp[kind].splice(i,1);fpSave();fpRenderAll();}
+function fpDel(kind,i){
+  var item=fp[kind][i];
+  fp[kind].splice(i,1);fpSave();fpRenderAll();
+  if(item&&item._nid){withSync(async function(){await deletePage(item._nid);});}
+}
 fpLoad();
 
 /* ============================================================
@@ -2181,12 +2296,22 @@ function goTab(id,btn){
   document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active');});
   document.getElementById(id).classList.add('active');
   if(btn)btn.classList.add('active');
+  try{localStorage.setItem('active_tab',id);}catch(e){}
   /* 탭 전환 시 해당 탭 렌더 */
   if(id==='tasks'){renderDailyTasks();renderWeeklyTasks();renderMonthlyTasks();}
   if(id==='goals'){renderGoals();}
   if(id==='trips'){renderTrips();}
-  if(id==='fp'){fpRenderAll();}
+  if(id==='fp'){fpRenderAll();fpRestoreSub();}
   if(id==='dash'){renderDashboard();}
+}
+/* 새로고침 시 마지막 탭 복원 */
+function restoreTab(){
+  var id;try{id=localStorage.getItem('active_tab');}catch(e){}
+  if(!id||!document.getElementById(id))return;
+  var btn=Array.prototype.slice.call(document.querySelectorAll('.tabs .tab')).find(function(b){
+    return b.getAttribute('onclick')&&b.getAttribute('onclick').indexOf("'"+id+"'")>=0;
+  });
+  goTab(id,btn);
 }
 
 var dp=document.getElementById('daily-date-picker');
@@ -2195,6 +2320,7 @@ dp.addEventListener('change',function(){selDailyDate=dp.value;checkCarryOver();r
 
 renderCal();
 loadAll();
+restoreTab();
 
 /* ============================================================
    자동 동기화 — 다른 기기에서의 변경을 주기적으로 반영
