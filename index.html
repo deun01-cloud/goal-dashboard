@@ -44,6 +44,11 @@
   .fp-subtab{padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--border2);color:var(--text2);background:transparent;font-family:inherit;}
   .fp-subtab:hover{background:var(--bg2);}
   .fp-subtab.active{background:var(--purple-light);border-color:var(--purple);color:var(--purple-dark);font-weight:600;}
+  .fp-month-nav{display:flex;align-items:center;gap:6px;}
+  .fp-month-label{font-size:14px;font-weight:700;min-width:64px;text-align:center;color:var(--text);}
+  .fp-mbtn{width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:15px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;}
+  .fp-mbtn:hover{background:var(--bg2);}
+  .fp-mbtn-today{width:auto;padding:0 10px;font-size:12px;}
   .fp-sub{display:none;} .fp-sub.active{display:block;}
   .fp-inline{display:flex;align-items:center;gap:8px;}
   .fp-add{display:flex;gap:6px;margin-top:12px;align-items:center;flex-wrap:wrap;}
@@ -458,26 +463,31 @@
 
     <!-- 서브탭 -->
     <div class="fp-subtabs">
-      <button class="fp-subtab active" onclick="fpSub('overview',this)">📊 한눈에</button>
-      <button class="fp-subtab" onclick="fpSub('cashflow',this)">🔄 현금흐름</button>
+      <button class="fp-subtab active" onclick="fpSub('cashflow',this)">🔄 현금흐름</button>
       <button class="fp-subtab" onclick="fpSub('networth',this)">🏦 순자산</button>
       <button class="fp-subtab" onclick="fpSub('plan',this)">🎯 계획</button>
     </div>
 
-    <!-- ===== 한눈에 ===== -->
-    <div id="fp-overview" class="fp-sub active">
+    <!-- ===== 현금흐름 (한눈에 + 수입/고정비/연간지출/현금) ===== -->
+    <div id="fp-cashflow" class="fp-sub active">
+      <!-- 한눈에 보기 + 월 선택 -->
       <div class="card">
-        <div class="card-title">한눈에 보기</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <div class="card-title" style="margin:0;">한눈에 보기</div>
+          <div class="fp-month-nav">
+            <button class="fp-mbtn" onclick="fpMonthShift(-1)">‹</button>
+            <span id="fp-month-label" class="fp-month-label">—</span>
+            <button class="fp-mbtn" onclick="fpMonthShift(1)">›</button>
+            <button class="fp-mbtn fp-mbtn-today" onclick="fpMonthToday()">이번 달</button>
+          </div>
+        </div>
         <div class="stat-grid" id="fp-summary"></div>
       </div>
       <div class="card">
         <div class="card-title">재무 건전성 진단</div>
         <div id="fp-health"></div>
       </div>
-    </div>
 
-    <!-- ===== 현금흐름 (수입/고정비/연간지출/현금) ===== -->
-    <div id="fp-cashflow" class="fp-sub">
       <!-- 현재 현금 -->
       <div class="card">
         <div class="card-title">현재 보유 현금 (비상금 · 투자 제외)</div>
@@ -1898,6 +1908,8 @@ async function withSync(fn){
 ============================================================ */
 var FP_KEY='fp_data_v1';
 var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[]};
+/* 한눈에 보기에서 선택된 월 (1~12). 기본값=이번 달 */
+var fpSelMonth=(new Date()).getMonth()+1;
 /* 구분(노션) ↔ fp 배열 키 매핑 */
 var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채'};
 var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts'};
@@ -1952,7 +1964,7 @@ async function fpMigrateLocal(){
     /* 노션 항목과 name+amt 키로 중복 비교 */
     var keys={};
     ['income','fixed','annual','assets','debts'].forEach(function(k){
-      (fp[k]||[]).forEach(function(x){keys[k+'|'+x.name+'|'+x.amt]=true;});
+      (fp[k]||[]).forEach(function(x){keys[k+'|'+x.name+'|'+x.amt+(k==='annual'?'|'+(x.month||1):'')]=true;});
     });
     var migrated=false;
     var lists=['income','fixed','annual','assets','debts'];
@@ -1962,7 +1974,7 @@ async function fpMigrateLocal(){
       for(var i=0;i<arr.length;i++){
         var x=arr[i];
         if(!x||!x.name||x._nid)continue;             /* 이미 노션 id 있으면 skip */
-        if(keys[k+'|'+x.name+'|'+x.amt])continue;     /* 노션에 이미 동일 항목 있음 */
+        if(keys[k+'|'+x.name+'|'+x.amt+(k==='annual'?'|'+(x.month||1):'')])continue;     /* 노션에 이미 동일 항목 있음 */
         var nid=await fpCreateNotion(k,x);
         x._nid=nid; fp[k].push(x); migrated=true;
       }
@@ -2044,13 +2056,32 @@ function fpRenderAll(){
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
 }
 
+/* 선택 월의 연간 주요지출 합계 + 항목 목록 */
+function fpMonthAnnual(month){
+  var items=fp.annual.filter(function(a){return (a.month||1)===month;});
+  return {items:items, total:fpSum(items)};
+}
+function fpMonthShift(delta){
+  fpSelMonth=((fpSelMonth-1+delta)%12+12)%12+1;
+  fpRenderSummary();
+}
+function fpMonthToday(){
+  fpSelMonth=(new Date()).getMonth()+1;
+  fpRenderSummary();
+}
+
 function fpRenderSummary(){
   var m=fpMetrics();
+  var lbl=document.getElementById('fp-month-label');
+  if(lbl)lbl.textContent=fpSelMonth+'월';
+  var ann=fpMonthAnnual(fpSelMonth);
+  /* 해당 월 주요지출 상세 (툴팁) */
+  var annDetail=ann.items.length?ann.items.map(function(a){return a.name+' '+wonShort(a.amt);}).join(', '):'없음';
   var el=document.getElementById('fp-summary');
   el.innerHTML=
     '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.inc)+'</div><div class="fp-stat-label">월 수입</div></div>'+
     '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.fix)+'</div><div class="fp-stat-label">월 고정비</div></div>'+
-    '<div class="fp-stat"><div class="fp-stat-val '+(m.net>=0?'pos':'neg')+'">'+wonShort(m.net)+'</div><div class="fp-stat-label">월 실질 여유자금</div></div>'+
+    '<div class="fp-stat" title="'+escHtml(annDetail)+'"><div class="fp-stat-val '+(ann.total>0?'neg':'')+'">'+wonShort(ann.total)+'</div><div class="fp-stat-label">'+fpSelMonth+'월 주요지출</div></div>'+
     '<div class="fp-stat"><div class="fp-stat-val '+(m.netWorth>=0?'pos':'neg')+'">'+wonShort(m.netWorth)+'</div><div class="fp-stat-label">순자산</div></div>';
 }
 
@@ -2090,9 +2121,9 @@ function fpRenderIncome(){
   var el=document.getElementById('fp-income-list');
   if(fp.income.length===0){el.innerHTML='<div class="fp-empty">등록된 수입이 없습니다</div>';return;}
   el.innerHTML=fp.income.map(function(x,i){
-    return '<div class="fp-row"><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return '<div class="fp-row" ondblclick="fpEdit(\'income\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="fpDel(\'income\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'income\','+i+')">&#10005;</button></div>';
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.income))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2100,9 +2131,9 @@ function fpRenderFixed(){
   var el=document.getElementById('fp-fixed-list');
   if(fp.fixed.length===0){el.innerHTML='<div class="fp-empty">등록된 고정비가 없습니다</div>';return;}
   el.innerHTML=fp.fixed.map(function(x,i){
-    return '<div class="fp-row"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return '<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="fpDel(\'fixed\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'fixed\','+i+')">&#10005;</button></div>';
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.fixed))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2111,9 +2142,9 @@ function fpRenderAnnual(){
   if(fp.annual.length===0){el.innerHTML='<div class="fp-empty">등록된 연간 지출이 없습니다</div>';return;}
   var sorted=fp.annual.map(function(x,i){return{x:x,i:i};}).sort(function(a,b){return (a.x.month||1)-(b.x.month||1);});
   el.innerHTML=sorted.map(function(o){
-    return '<div class="fp-row"><span class="fp-mtag">'+(o.x.month||1)+'월</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
+    return '<div class="fp-row" ondblclick="fpEdit(\'annual\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+(o.x.month||1)+'월</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
       '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
-      '<button class="del-btn" onclick="fpDel(\'annual\','+o.i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'annual\','+o.i+')">&#10005;</button></div>';
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">연 합계</span><span class="fp-amt">'+won(fpSum(fp.annual))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2121,9 +2152,9 @@ function fpRenderAssets(){
   var el=document.getElementById('fp-asset-list');if(!el)return;
   if(fp.assets.length===0){el.innerHTML='<div class="fp-empty">등록된 자산이 없습니다</div>';return;}
   el.innerHTML=fp.assets.map(function(x,i){
-    return '<div class="fp-row"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return '<div class="fp-row" ondblclick="fpEdit(\'assets\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="fpDel(\'assets\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'assets\','+i+')">&#10005;</button></div>';
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">자산 합계(현금 제외)</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.assets))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2133,9 +2164,9 @@ function fpRenderDebts(){
   var totalInterest=fp.debts.reduce(function(s,d){return s+(d.amt*((d.rate||0)/100));},0);
   el.innerHTML=fp.debts.map(function(x,i){
     var rateTag=x.rate?'<span class="fp-cat">'+x.rate+'%</span>':'';
-    return '<div class="fp-row">'+rateTag+'<span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return '<div class="fp-row" ondblclick="fpEdit(\'debts\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;">'+rateTag+'<span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt" style="color:var(--meeting);">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="fpDel(\'debts\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'debts\','+i+')">&#10005;</button></div>';
   }).join('')+
   '<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">부채 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.debts))+'</span><span style="width:18px;"></span></div>'+
   (totalInterest>0?'<div class="fp-row"><span class="fp-name" style="font-size:12px;color:var(--text2);">예상 연 이자 부담</span><span class="fp-amt" style="font-size:13px;color:var(--coral);">'+won(totalInterest)+' (월 '+wonShort(totalInterest/12)+')</span><span style="width:18px;"></span></div>':'');
@@ -2239,7 +2270,7 @@ function fpAddIncome(){
   var item={name:n,amt:a};fp.income.push(item);fpSave();
   document.getElementById('fp-inc-name').value='';document.getElementById('fp-inc-amt').value='';
   fpRenderAll();
-  withSync(async function(){item._nid=await fpCreateNotion('income',item);});
+  withSync(async function(){item._nid=await fpCreateNotion('income',item);fpSave();});
 }
 function fpAddFixed(){
   var n=document.getElementById('fp-fix-name').value.trim();
@@ -2249,7 +2280,7 @@ function fpAddFixed(){
   var item={name:n,cat:c,amt:a};fp.fixed.push(item);fpSave();
   document.getElementById('fp-fix-name').value='';document.getElementById('fp-fix-amt').value='';
   fpRenderAll();
-  withSync(async function(){item._nid=await fpCreateNotion('fixed',item);});
+  withSync(async function(){item._nid=await fpCreateNotion('fixed',item);fpSave();});
 }
 function fpAddAnnual(){
   var n=document.getElementById('fp-ann-name').value.trim();
@@ -2259,7 +2290,7 @@ function fpAddAnnual(){
   var item={name:n,month:m,amt:a};fp.annual.push(item);fpSave();
   document.getElementById('fp-ann-name').value='';document.getElementById('fp-ann-amt').value='';
   fpRenderAll();
-  withSync(async function(){item._nid=await fpCreateNotion('annual',item);});
+  withSync(async function(){item._nid=await fpCreateNotion('annual',item);fpSave();});
 }
 function fpAddAsset(){
   var n=document.getElementById('fp-as-name').value.trim();
@@ -2269,7 +2300,7 @@ function fpAddAsset(){
   var item={name:n,cat:c,amt:a};fp.assets.push(item);fpSave();
   document.getElementById('fp-as-name').value='';document.getElementById('fp-as-amt').value='';
   fpRenderAll();
-  withSync(async function(){item._nid=await fpCreateNotion('assets',item);});
+  withSync(async function(){item._nid=await fpCreateNotion('assets',item);fpSave();});
 }
 function fpAddDebt(){
   var n=document.getElementById('fp-debt-name').value.trim();
@@ -2279,7 +2310,51 @@ function fpAddDebt(){
   var item={name:n,amt:a,rate:r};fp.debts.push(item);fpSave();
   document.getElementById('fp-debt-name').value='';document.getElementById('fp-debt-amt').value='';document.getElementById('fp-debt-rate').value='';
   fpRenderAll();
-  withSync(async function(){item._nid=await fpCreateNotion('debts',item);});
+  withSync(async function(){item._nid=await fpCreateNotion('debts',item);fpSave();});
+}
+function fpEdit(kind,i){
+  var item=fp[kind][i];if(!item)return;
+  /* 항목명 */
+  var n=prompt('항목명',item.name);
+  if(n===null)return;
+  n=n.trim();if(!n){alert('항목명을 입력하세요');return;}
+  /* 금액 */
+  var aRaw=prompt('금액',item.amt);
+  if(aRaw===null)return;
+  var a=fpNum(aRaw);if(a<=0){alert('금액을 올바르게 입력하세요');return;}
+  item.name=n;item.amt=a;
+  /* 카테고리 (고정비·자산) */
+  if(kind==='fixed'){
+    var c=prompt('카테고리 (주거/공과금/보험/통신/구독/대출/생활/기타)',item.cat||'기타');
+    if(c!==null&&c.trim())item.cat=c.trim();
+  }else if(kind==='assets'){
+    var c2=prompt('카테고리 (예적금/주식/금/실물/부동산/연금/기타)',item.cat||'기타');
+    if(c2!==null&&c2.trim())item.cat=c2.trim();
+  }
+  /* 월 (연간지출) */
+  if(kind==='annual'){
+    var mRaw=prompt('월 (1~12)',item.month||1);
+    if(mRaw!==null){var m=parseInt(mRaw,10);if(m>=1&&m<=12)item.month=m;}
+  }
+  /* 금리 (부채) */
+  if(kind==='debts'){
+    var rRaw=prompt('금리 (%)',item.rate||0);
+    if(rRaw!==null)item.rate=fpFloat(rRaw);
+  }
+  fpSave();fpRenderAll();
+  /* 노션 반영: _nid 있으면 update, 없으면 create */
+  withSync(async function(){
+    if(item._nid){
+      var props={'이름':pTitle(item.name),'금액':pNumber(item.amt)};
+      if((kind==='fixed'||kind==='assets')&&item.cat)props['카테고리']=pSelect(item.cat);
+      if(kind==='annual')props['월']=pNumber(item.month||1);
+      if(kind==='debts')props['금리']=pNumber(item.rate||0);
+      await updatePage(item._nid,props);
+    }else{
+      item._nid=await fpCreateNotion(kind,item);
+    }
+    fpSave();
+  });
 }
 function fpDel(kind,i){
   var item=fp[kind][i];
