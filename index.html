@@ -57,6 +57,15 @@
   .fp-amt-in{width:110px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;text-align:right;}
   .fp-rate-in{width:64px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 8px;font-size:13px;color:var(--text);background:var(--bg);outline:none;font-family:inherit;text-align:right;}
   .fp-sel{border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 6px;font-size:13px;color:var(--text);background:var(--bg);outline:none;cursor:pointer;font-family:inherit;flex:none;}
+  .fp-row-edit{gap:6px;padding:6px 0;align-items:center;}
+  .fp-row-edit .fp-name-in{flex:1;min-width:80px;}
+  .fp-row-edit .fp-amt-in{width:120px;}
+  .fp-row-edit .fp-rate-in{width:70px;}
+  .fp-edit-ok,.fp-edit-cancel{width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--border2);cursor:pointer;font-size:13px;font-family:inherit;flex:none;display:inline-flex;align-items:center;justify-content:center;}
+  .fp-edit-ok{background:var(--purple);border-color:var(--purple);color:#fff;}
+  .fp-edit-ok:hover{filter:brightness(1.08);}
+  .fp-edit-cancel{background:transparent;color:var(--text2);}
+  .fp-edit-cancel:hover{background:var(--bg2);}
   .fp-unit{font-size:13px;color:var(--text2);}
   .fp-btn-sm{padding:7px 14px;font-size:13px;flex:none;}
   .fp-hint{font-size:12px;color:var(--text2);margin-top:8px;}
@@ -1951,6 +1960,7 @@ async function fpLoadFromNotion(){
   await fpMigrateLocal();
   fpSave();
   /* FP 탭이 열려있으면 다시 렌더 */
+  if(fpEditing)return; /* 인라인 편집 중이면 백그라운드 새로고침이 편집을 덮어쓰지 않게 */
   if(document.getElementById('fp')&&document.getElementById('fp').classList.contains('active'))fpRenderAll();
 }
 
@@ -2121,9 +2131,9 @@ function fpRenderIncome(){
   var el=document.getElementById('fp-income-list');
   if(fp.income.length===0){el.innerHTML='<div class="fp-empty">등록된 수입이 없습니다</div>';return;}
   el.innerHTML=fp.income.map(function(x,i){
-    return '<div class="fp-row" ondblclick="fpEdit(\'income\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return fpRow('income',i,'<div class="fp-row" ondblclick="fpEdit(\'income\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'income\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'income\','+i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.income))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2131,9 +2141,9 @@ function fpRenderFixed(){
   var el=document.getElementById('fp-fixed-list');
   if(fp.fixed.length===0){el.innerHTML='<div class="fp-empty">등록된 고정비가 없습니다</div>';return;}
   el.innerHTML=fp.fixed.map(function(x,i){
-    return '<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return fpRow('fixed',i,'<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'fixed\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'fixed\','+i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.fixed))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2142,9 +2152,9 @@ function fpRenderAnnual(){
   if(fp.annual.length===0){el.innerHTML='<div class="fp-empty">등록된 연간 지출이 없습니다</div>';return;}
   var sorted=fp.annual.map(function(x,i){return{x:x,i:i};}).sort(function(a,b){return (a.x.month||1)-(b.x.month||1);});
   el.innerHTML=sorted.map(function(o){
-    return '<div class="fp-row" ondblclick="fpEdit(\'annual\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+(o.x.month||1)+'월</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
+    return fpRow('annual',o.i,'<div class="fp-row" ondblclick="fpEdit(\'annual\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+(o.x.month||1)+'월</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
       '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
-      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'annual\','+o.i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'annual\','+o.i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">연 합계</span><span class="fp-amt">'+won(fpSum(fp.annual))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2152,9 +2162,9 @@ function fpRenderAssets(){
   var el=document.getElementById('fp-asset-list');if(!el)return;
   if(fp.assets.length===0){el.innerHTML='<div class="fp-empty">등록된 자산이 없습니다</div>';return;}
   el.innerHTML=fp.assets.map(function(x,i){
-    return '<div class="fp-row" ondblclick="fpEdit(\'assets\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return fpRow('assets',i,'<div class="fp-row" ondblclick="fpEdit(\'assets\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'assets\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'assets\','+i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">자산 합계(현금 제외)</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.assets))+'</span><span style="width:18px;"></span></div>';
 }
 
@@ -2164,9 +2174,9 @@ function fpRenderDebts(){
   var totalInterest=fp.debts.reduce(function(s,d){return s+(d.amt*((d.rate||0)/100));},0);
   el.innerHTML=fp.debts.map(function(x,i){
     var rateTag=x.rate?'<span class="fp-cat">'+x.rate+'%</span>':'';
-    return '<div class="fp-row" ondblclick="fpEdit(\'debts\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;">'+rateTag+'<span class="fp-name">'+escHtml(x.name)+'</span>'+
+    return fpRow('debts',i,'<div class="fp-row" ondblclick="fpEdit(\'debts\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;">'+rateTag+'<span class="fp-name">'+escHtml(x.name)+'</span>'+
       '<span class="fp-amt" style="color:var(--meeting);">'+won(x.amt)+'</span>'+
-      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'debts\','+i+')">&#10005;</button></div>';
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'debts\','+i+')">&#10005;</button></div>');
   }).join('')+
   '<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">부채 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.debts))+'</span><span style="width:18px;"></span></div>'+
   (totalInterest>0?'<div class="fp-row"><span class="fp-name" style="font-size:12px;color:var(--text2);">예상 연 이자 부담</span><span class="fp-amt" style="font-size:13px;color:var(--coral);">'+won(totalInterest)+' (월 '+wonShort(totalInterest/12)+')</span><span style="width:18px;"></span></div>':'');
@@ -2312,35 +2322,74 @@ function fpAddDebt(){
   fpRenderAll();
   withSync(async function(){item._nid=await fpCreateNotion('debts',item);fpSave();});
 }
+/* 인라인 편집 상태: {kind, i} 또는 null */
+var fpEditing=null;
+var FP_FIX_CATS=['주거','공과금','보험','통신','구독','대출','생활','기타'];
+var FP_AS_CATS=['예적금','주식','금/실물','부동산','연금','기타'];
+
+/* 더블클릭 → 해당 행을 편집 모드로 */
 function fpEdit(kind,i){
-  var item=fp[kind][i];if(!item)return;
-  /* 항목명 */
-  var n=prompt('항목명',item.name);
-  if(n===null)return;
-  n=n.trim();if(!n){alert('항목명을 입력하세요');return;}
-  /* 금액 */
-  var aRaw=prompt('금액',item.amt);
-  if(aRaw===null)return;
-  var a=fpNum(aRaw);if(a<=0){alert('금액을 올바르게 입력하세요');return;}
+  fpEditing={kind:kind,i:i};
+  fpRenderAll();
+  /* 포커스를 항목명 입력칸으로 */
+  setTimeout(function(){
+    var inp=document.getElementById('fp-edit-name');
+    if(inp){inp.focus();inp.select();}
+  },0);
+}
+function fpCancelEdit(){fpEditing=null;fpRenderAll();}
+function fpEditKey(ev){
+  if(ev.key==='Enter'){ev.preventDefault();fpCommitEdit();}
+  else if(ev.key==='Escape'){ev.preventDefault();fpCancelEdit();}
+}
+/* 편집 행 HTML 생성 */
+function fpEditRowHtml(kind,item){
+  var h='<div class="fp-row fp-row-edit">';
+  /* 앞쪽 셀렉트(카테고리/월) */
+  if(kind==='fixed'||kind==='assets'){
+    var cats=kind==='fixed'?FP_FIX_CATS:FP_AS_CATS;
+    h+='<select id="fp-edit-cat" class="fp-sel">'+cats.map(function(c){
+      return '<option value="'+c+'"'+((item.cat||'기타')===c?' selected':'')+'>'+c+'</option>';
+    }).join('')+'</select>';
+  }else if(kind==='annual'){
+    h+='<select id="fp-edit-month" class="fp-sel">';
+    for(var mo=1;mo<=12;mo++)h+='<option value="'+mo+'"'+((item.month||1)===mo?' selected':'')+'>'+mo+'월</option>';
+    h+='</select>';
+  }else if(kind==='debts'){
+    h+='<input type="text" id="fp-edit-rate" inputmode="decimal" class="fp-rate-in" value="'+(item.rate||'')+'" placeholder="금리%" onkeydown="fpEditKey(event)">';
+  }
+  /* 이름 + 금액 */
+  h+='<input type="text" id="fp-edit-name" class="fp-name-in" value="'+escHtml(item.name||'')+'" onkeydown="fpEditKey(event)">';
+  h+='<input type="text" id="fp-edit-amt" inputmode="numeric" class="fp-amt-in" value="'+(item.amt?item.amt.toLocaleString('ko-KR'):'')+'" onkeydown="fpEditKey(event)">';
+  /* 저장/취소 */
+  h+='<button class="fp-edit-ok" onclick="fpCommitEdit()" title="저장">&#10003;</button>';
+  h+='<button class="fp-edit-cancel" onclick="fpCancelEdit()" title="취소">&#10005;</button>';
+  h+='</div>';
+  return h;
+}
+/* 일반 행 vs 편집 행 분기 */
+function fpRow(kind,i,normalHtml){
+  if(fpEditing&&fpEditing.kind===kind&&fpEditing.i===i){
+    return fpEditRowHtml(kind,fp[kind][i]);
+  }
+  return normalHtml;
+}
+/* 편집 확정 */
+function fpCommitEdit(){
+  if(!fpEditing)return;
+  var kind=fpEditing.kind, i=fpEditing.i;
+  var item=fp[kind][i];if(!item){fpEditing=null;fpRenderAll();return;}
+  var nameEl=document.getElementById('fp-edit-name');
+  var amtEl=document.getElementById('fp-edit-amt');
+  var n=(nameEl?nameEl.value:'').trim();
+  var a=fpNum(amtEl?amtEl.value:'');
+  if(!n){alert('항목명을 입력하세요');if(nameEl)nameEl.focus();return;}
+  if(a<=0){alert('금액을 올바르게 입력하세요');if(amtEl)amtEl.focus();return;}
   item.name=n;item.amt=a;
-  /* 카테고리 (고정비·자산) */
-  if(kind==='fixed'){
-    var c=prompt('카테고리 (주거/공과금/보험/통신/구독/대출/생활/기타)',item.cat||'기타');
-    if(c!==null&&c.trim())item.cat=c.trim();
-  }else if(kind==='assets'){
-    var c2=prompt('카테고리 (예적금/주식/금/실물/부동산/연금/기타)',item.cat||'기타');
-    if(c2!==null&&c2.trim())item.cat=c2.trim();
-  }
-  /* 월 (연간지출) */
-  if(kind==='annual'){
-    var mRaw=prompt('월 (1~12)',item.month||1);
-    if(mRaw!==null){var m=parseInt(mRaw,10);if(m>=1&&m<=12)item.month=m;}
-  }
-  /* 금리 (부채) */
-  if(kind==='debts'){
-    var rRaw=prompt('금리 (%)',item.rate||0);
-    if(rRaw!==null)item.rate=fpFloat(rRaw);
-  }
+  if(kind==='fixed'||kind==='assets'){var c=document.getElementById('fp-edit-cat');if(c)item.cat=c.value;}
+  if(kind==='annual'){var mo=document.getElementById('fp-edit-month');if(mo)item.month=parseInt(mo.value,10)||1;}
+  if(kind==='debts'){var r=document.getElementById('fp-edit-rate');if(r)item.rate=fpFloat(r.value);}
+  fpEditing=null;
   fpSave();fpRenderAll();
   /* 노션 반영: _nid 있으면 update, 없으면 create */
   withSync(async function(){
