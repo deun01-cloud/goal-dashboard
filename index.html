@@ -71,6 +71,21 @@
   .fp-hint{font-size:12px;color:var(--text2);margin-top:8px;}
   .fp-memo-area{width:100%;min-height:90px;resize:vertical;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.6;color:var(--text);background:var(--bg);outline:none;font-family:inherit;box-sizing:border-box;}
   .fp-memo-area:focus{border-color:var(--purple);}
+  .fp-memo-write{display:flex;gap:8px;align-items:flex-end;}
+  .fp-memo-write .fp-memo-area{flex:1;min-height:60px;}
+  .fp-memo-list{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+  .fp-memo-post{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;background:var(--bg2);}
+  .fp-memo-line{display:flex;align-items:center;gap:10px;}
+  .fp-memo-chk{width:17px;height:17px;cursor:pointer;flex-shrink:0;accent-color:var(--teal);}
+  .fp-memo-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .fp-memo-date{font-size:11px;color:var(--text2);flex-shrink:0;white-space:nowrap;}
+  .fp-memo-btns{display:flex;gap:6px;flex-shrink:0;}
+  .fp-memo-mini{font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border2);border-radius:6px;padding:2px 8px;cursor:pointer;font-family:inherit;}
+  .fp-memo-mini:hover{background:var(--bg3);color:var(--text);}
+  .fp-memo-line .fp-memo-text{flex:1;min-width:0;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fp-memo-done .fp-memo-text{text-decoration:line-through;color:var(--text2);}
+  .fp-memo-editing{background:var(--bg);}
+  .fp-memo-actions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end;}
   .fp-fgoal{padding:10px 0;border-bottom:1px solid var(--border);}
   .fp-fgoal:last-child{border-bottom:none;}
   .fp-fgoal-top{display:flex;align-items:center;gap:8px;cursor:pointer;}
@@ -81,6 +96,9 @@
   .fp-fgoal-fill{height:100%;border-radius:4px;background:var(--purple);transition:width .3s;}
   .fp-fgoal-fill.done{background:var(--teal);}
   .fp-fgoal-pct{font-size:11px;color:var(--text2);margin-top:4px;display:flex;justify-content:space-between;}
+  .fp-fgoal-chk{width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:var(--teal);}
+  .fp-fgoal-checked .fp-fgoal-name{text-decoration:line-through;color:var(--text2);}
+  .fp-fgoal-checked .fp-fgoal-amt{color:var(--text2);}
   .fp-stat{background:var(--bg2);border-radius:var(--radius-sm);padding:12px 14px;}
   .fp-stat-val{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;}
   .fp-stat-val.pos{color:var(--teal);} .fp-stat-val.neg{color:var(--meeting);}
@@ -626,8 +644,11 @@
       <!-- 자유 메모 -->
       <div class="card">
         <div class="card-title">📝 메모 · 다짐</div>
-        <textarea id="fp-memo" class="fp-memo-area" placeholder="예: 2026년까지 비상금 6개월치 확보 → 그 후 주식 비중 늘리기..." oninput="fpMemoChanged()"></textarea>
-        <div id="fp-memo-status" class="fp-hint"></div>
+        <div class="fp-memo-write">
+          <textarea id="fp-memo-input" class="fp-memo-area" placeholder="다짐이나 메모를 적고 등록하세요. (예: 2026년까지 비상금 6개월치 확보)"></textarea>
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddMemo()">등록</button>
+        </div>
+        <div id="fp-memo-list" class="fp-memo-list"></div>
       </div>
 
       <!-- 월 저축 목표 -->
@@ -1952,15 +1973,20 @@ async function withSync(fn){
    노션이 master. 한 DB에 '구분' 필드로 수입/고정비/연간지출/자산/부채/설정 통합.
 ============================================================ */
 var FP_KEY='fp_data_v1';
-var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:''};
+var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:'',memos:[]};
 /* 한눈에 보기에서 선택된 월 (1~12). 기본값=이번 달 */
 var fpSelMonth=(new Date()).getMonth()+1;
 var fpEditingFG=null;
+var fpEditingMemo=null;
 /* 구분(노션) ↔ fp 배열 키 매핑 */
 var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채',fgoals:'재무목표'};
 var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts','재무목표':'fgoals'};
 function fpLoad(){
-  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||''};}}catch(e){}
+  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||'',memos:d.memos||[]};}}catch(e){}
+  /* 기존 단일 메모 → 게시글 1개로 1회 이관 */
+  if((!fp.memos||fp.memos.length===0)&&fp.memo&&fp.memo.trim()){
+    fp.memos=[{text:fp.memo.trim(),ts:Date.now()}];fp.memo='';fpSave();
+  }
 }
 function fpSave(){try{localStorage.setItem(FP_KEY,JSON.stringify(fp));}catch(e){}}
 
@@ -1970,10 +1996,10 @@ async function fpLoadFromNotion(){
   var rows;
   try{rows=await queryDB(DB.fp);}catch(e){diag('⚠ FP 로드 실패: '+e.message,'#f80');return;}
   var next={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[]};
-  /* 기한·메모는 로컬 전용 → 노션 로드 시 기존 로컬값 보존 */
-  var prevDue={};
-  (fp.fgoals||[]).forEach(function(g){if(g.name)prevDue[g.name]=g.due||'';});
-  next.memo=fp.memo||'';
+  /* 기한·달성체크는 로컬 전용 → 노션 로드 시 기존 로컬값 보존 */
+  var prevDue={},prevDone={};
+  (fp.fgoals||[]).forEach(function(g){if(g.name){prevDue[g.name]=g.due||'';prevDone[g.name]=!!g.done;}});
+  next.memo=fp.memo||'';next.memos=fp.memos||[];
   var cashId=null,goalId=null;
   rows.forEach(function(p){
     var pr=p.properties;
@@ -1995,7 +2021,7 @@ async function fpLoadFromNotion(){
     if(key==='income')item.cat=(cat==='목표')?'목표':'현재';
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
-    if(key==='fgoals'){item.target=amt;item.due=prevDue[name]||'';delete item.amt;}
+    if(key==='fgoals'){item.target=amt;item.due=prevDue[name]||'';item.done=!!prevDone[name];delete item.amt;}
     next[key].push(item);
   });
   fp=next; fp._cashId=cashId; fp._goalId=goalId;
@@ -2003,7 +2029,7 @@ async function fpLoadFromNotion(){
   await fpMigrateLocal();
   fpSave();
   /* FP 탭이 열려있으면 다시 렌더 */
-  if(fpEditing||fpEditingFG!==null)return; /* 인라인 편집 중이면 백그라운드 새로고침이 편집을 덮어쓰지 않게 */
+  if(fpEditing||fpEditingFG!==null||fpEditingMemo!==null)return; /* 인라인 편집 중이면 백그라운드 새로고침이 편집을 덮어쓰지 않게 */
   if(document.getElementById('fp')&&document.getElementById('fp').classList.contains('active'))fpRenderAll();
 }
 
@@ -2112,7 +2138,8 @@ function fpRenderAll(){
   /* 입력칸 현재값 반영 */
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
-  var mm=document.getElementById('fp-memo');if(mm&&document.activeElement!==mm)mm.value=fp.memo||'';
+  var mm=document.getElementById('fp-memo-input');/* 게시판 입력칸은 비우지 않음 */
+  fpRenderMemos();
 }
 
 /* 선택 월의 연간 주요지출 합계 + 항목 목록 */
@@ -2490,16 +2517,18 @@ function fpRenderFGoals(){
         '<button class="fp-edit-cancel" onclick="fpCancelFG()">&#10005;</button></div>';
     }
     var pct=g.target>0?Math.min(100,Math.round(base/g.target*100)):0;
-    var done=pct>=100;
-    return '<div class="fp-fgoal">'+
-      '<div class="fp-fgoal-top" ondblclick="fpEditFGoal('+i+')" title="더블클릭하여 수정">'+
-        '<span class="fp-fgoal-name">'+escHtml(g.name)+'</span>'+
+    var autoDone=pct>=100;
+    var checked=!!g.done; /* 수동 달성 체크 */
+    return '<div class="fp-fgoal'+(checked?' fp-fgoal-checked':'')+'">'+
+      '<div class="fp-fgoal-top">'+
+        '<input type="checkbox" class="fp-fgoal-chk" '+(checked?'checked':'')+' onclick="event.stopPropagation();fpToggleFGoal('+i+')" title="달성 여부 체크">'+
+        '<span class="fp-fgoal-name" ondblclick="fpEditFGoal('+i+')" title="더블클릭하여 수정">'+escHtml(g.name)+'</span>'+
         (g.due?'<span class="fp-fgoal-due">'+escHtml(g.due)+'</span>':'')+
         '<span class="fp-fgoal-amt">'+won(g.target)+'</span>'+
         '<button class="del-btn" onclick="event.stopPropagation();fpDelFGoal('+i+')">&#10005;</button>'+
       '</div>'+
-      '<div class="fp-fgoal-bar"><div class="fp-fgoal-fill'+(done?' done':'')+'" style="width:'+pct+'%;"></div></div>'+
-      '<div class="fp-fgoal-pct"><span>'+(done?'✅ 달성!':'진행률 '+pct+'%')+'</span><span>'+wonShort(base)+' / '+wonShort(g.target)+'</span></div>'+
+      '<div class="fp-fgoal-bar"><div class="fp-fgoal-fill'+(autoDone||checked?' done':'')+'" style="width:'+(checked?100:pct)+'%;"></div></div>'+
+      '<div class="fp-fgoal-pct"><span>'+(checked?'✅ 달성 완료':(autoDone?'🎉 목표 도달!':'진행률 '+pct+'%'))+'</span><span>'+wonShort(base)+' / '+wonShort(g.target)+'</span></div>'+
     '</div>';
   }).join('');
 }
@@ -2539,17 +2568,65 @@ function fpDelFGoal(i){
   fp.fgoals.splice(i,1);fpSave();fpRenderAll();
   if(g&&g._nid){withSync(async function(){await deletePage(g._nid);});}
 }
-/* ===== 메모 (로컬 저장, 디바운스) ===== */
-var fpMemoTimer=null;
-function fpMemoChanged(){
-  var el=document.getElementById('fp-memo');if(!el)return;
-  fp.memo=el.value;
-  var st=document.getElementById('fp-memo-status');if(st)st.textContent='저장 중...';
-  if(fpMemoTimer)clearTimeout(fpMemoTimer);
-  fpMemoTimer=setTimeout(function(){
-    fpSave();
-    var s=document.getElementById('fp-memo-status');if(s)s.textContent='✓ 저장됨 ('+new Date().toLocaleTimeString()+')';
-  },600);
+function fpToggleFGoal(i){
+  var g=fp.fgoals[i];if(!g)return;
+  g.done=!g.done;fpSave();fpRenderFGoals();
+}
+/* ===== 메모·다짐 게시판 (로컬 저장) ===== */
+function fpMemoFmt(ts){
+  var d=new Date(ts);
+  function p(n){return(n<10?'0':'')+n;}
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function fpRenderMemos(){
+  var el=document.getElementById('fp-memo-list');if(!el)return;
+  if(!fp.memos||fp.memos.length===0){el.innerHTML='<div class="fp-empty">등록된 메모가 없습니다</div>';return;}
+  /* 최신 글이 위로 */
+  var ordered=fp.memos.map(function(m,i){return{m:m,i:i};}).sort(function(a,b){return (b.m.ts||0)-(a.m.ts||0);});
+  el.innerHTML=ordered.map(function(o){
+    if(fpEditingMemo===o.i){
+      return '<div class="fp-memo-post fp-memo-editing">'+
+        '<textarea id="fp-memo-edit" class="fp-memo-area">'+escHtml(o.m.text||'')+'</textarea>'+
+        '<div class="fp-memo-actions">'+
+          '<button class="fp-edit-ok" onclick="fpCommitMemo()">저장</button>'+
+          '<button class="fp-edit-cancel" onclick="fpCancelMemo()">취소</button>'+
+        '</div></div>';
+    }
+    var done=!!o.m.done;
+    return '<div class="fp-memo-post fp-memo-line'+(done?' fp-memo-done':'')+'">'+
+      '<input type="checkbox" class="fp-memo-chk" '+(done?'checked':'')+' onclick="fpToggleMemo('+o.i+')" title="완료 체크">'+
+      '<span class="fp-memo-date">'+fpMemoFmt(o.m.ts)+(o.m.edited?' (수정됨)':'')+'</span>'+
+      '<span class="fp-memo-text">'+escHtml(o.m.text).replace(/\n/g,' ')+'</span>'+
+      '<span class="fp-memo-btns"><button class="fp-memo-mini" onclick="fpEditMemo('+o.i+')">수정</button>'+
+      '<button class="fp-memo-mini" onclick="fpDelMemo('+o.i+')">삭제</button></span></div>';
+  }).join('');
+}
+function fpAddMemo(){
+  var el=document.getElementById('fp-memo-input');if(!el)return;
+  var t=el.value.trim();if(!t){alert('내용을 입력하세요');return;}
+  if(!fp.memos)fp.memos=[];
+  fp.memos.push({text:t,ts:Date.now()});
+  el.value='';fpSave();fpRenderMemos();
+}
+function fpEditMemo(i){fpEditingMemo=i;fpRenderMemos();setTimeout(function(){var e=document.getElementById('fp-memo-edit');if(e){e.focus();}},0);}
+function fpCancelMemo(){fpEditingMemo=null;fpRenderMemos();}
+function fpCommitMemo(){
+  if(fpEditingMemo===null)return;
+  var m=fp.memos[fpEditingMemo];if(!m){fpEditingMemo=null;fpRenderMemos();return;}
+  var el=document.getElementById('fp-memo-edit');
+  var t=(el?el.value:'').trim();if(!t){alert('내용을 입력하세요');return;}
+  m.text=t;m.edited=true;
+  fpEditingMemo=null;fpSave();fpRenderMemos();
+}
+function fpDelMemo(i){
+  if(!confirm('이 메모를 삭제할까요?'))return;
+  fp.memos.splice(i,1);
+  if(fpEditingMemo===i)fpEditingMemo=null;
+  fpSave();fpRenderMemos();
+}
+function fpToggleMemo(i){
+  var m=fp.memos[i];if(!m)return;
+  m.done=!m.done;fpSave();fpRenderMemos();
 }
 function fpDel(kind,i){
   var item=fp[kind][i];

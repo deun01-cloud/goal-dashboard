@@ -236,7 +236,21 @@ body{
 .fp-del{background:transparent;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:4px;flex-shrink:0;}
 .fp-del:active{color:var(--coral);}
 .fp-hint{font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5;}
-.fp-memo-area{width:100%;min-height:96px;resize:vertical;border:1px solid var(--border2);border-radius:9px;padding:11px;font-size:14px;line-height:1.6;color:var(--text);background:var(--bg);outline:none;font-family:inherit;box-sizing:border-box;}
+.fp-memo-area{width:100%;min-height:70px;resize:vertical;border:1px solid var(--border2);border-radius:9px;padding:11px;font-size:14px;line-height:1.6;color:var(--text);background:var(--bg);outline:none;font-family:inherit;box-sizing:border-box;}
+.fp-memo-write{display:flex;gap:8px;align-items:flex-end;}
+.fp-memo-write .fp-memo-area{flex:1;}
+.fp-memo-list{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.fp-memo-post{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg2);}
+.fp-memo-line{display:flex;align-items:center;gap:9px;}
+.fp-memo-chk{width:19px;height:19px;cursor:pointer;flex-shrink:0;accent-color:var(--teal);}
+.fp-memo-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.fp-memo-date{font-size:10px;color:var(--text2);flex-shrink:0;white-space:nowrap;}
+.fp-memo-btns{display:flex;gap:5px;flex-shrink:0;}
+.fp-memo-mini{font-size:11px;color:var(--text2);background:transparent;border:1px solid var(--border2);border-radius:7px;padding:3px 8px;cursor:pointer;font-family:inherit;}
+.fp-memo-mini:active{background:var(--bg3);}
+.fp-memo-line .fp-memo-text{flex:1;min-width:0;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fp-memo-done .fp-memo-text{text-decoration:line-through;color:var(--text2);}
+.fp-memo-actions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end;}
 .fp-fgoal{padding:11px 0;border-bottom:1px solid var(--border);}
 .fp-fgoal:last-child{border-bottom:none;}
 .fp-fgoal-top{display:flex;align-items:center;gap:8px;}
@@ -247,6 +261,9 @@ body{
 .fp-fgoal-fill{height:100%;border-radius:4px;background:var(--meeting);transition:width .3s;}
 .fp-fgoal-fill.done{background:var(--teal);}
 .fp-fgoal-pct{font-size:10px;color:var(--text2);margin-top:4px;display:flex;justify-content:space-between;}
+.fp-fgoal-chk{width:20px;height:20px;cursor:pointer;flex-shrink:0;accent-color:var(--teal);}
+.fp-fgoal-checked .fp-fgoal-name{text-decoration:line-through;color:var(--text2);}
+.fp-fgoal-checked .fp-fgoal-amt{color:var(--text2);}
 .proj-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .proj-row.warn{background:var(--red-light);border-radius:6px;padding:8px 10px;}
 .proj-row.tight{background:var(--coral-light);border-radius:6px;padding:8px 10px;}
@@ -587,8 +604,11 @@ body{
         </div>
         <div class="card">
           <div class="fp-card-title">📝 메모 · 다짐</div>
-          <textarea id="fp-memo" class="fp-memo-area" placeholder="예: 2026년까지 비상금 6개월치 확보..." oninput="fpMemoChanged()"></textarea>
-          <div id="fp-memo-status" class="fp-hint"></div>
+          <div class="fp-memo-write">
+            <textarea id="fp-memo-input" class="fp-memo-area" placeholder="다짐이나 메모를 적고 등록하세요."></textarea>
+            <button class="fp-btn-sm" onclick="fpAddMemo()">등록</button>
+          </div>
+          <div id="fp-memo-list" class="fp-memo-list"></div>
         </div>
         <div class="card">
           <div class="fp-card-title">재무 건전성 진단</div>
@@ -1633,14 +1653,16 @@ function startAutoSync(){
    노션이 master. 한 DB에 '구분' 필드로 수입/고정비/연간지출/자산/부채/설정 통합.
 ============================================================ */
 var FP_KEY='fp_data_v1';
-var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:''};
+var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:'',memos:[]};
 var fpSelMonth=(new Date()).getMonth()+1;
 var fpEditingFG=null;
+var fpEditingMemo=null;
 /* 구분(노션) ↔ fp 배열 키 매핑 */
 var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채',fgoals:'재무목표'};
 var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts','재무목표':'fgoals'};
 function fpLoad(){
-  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||''};}}catch(e){}
+  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||'',memos:d.memos||[]};}}catch(e){}
+  if((!fp.memos||fp.memos.length===0)&&fp.memo&&fp.memo.trim()){fp.memos=[{text:fp.memo.trim(),ts:Date.now()}];fp.memo='';fpSave();}
 }
 function fpSave(){try{localStorage.setItem(FP_KEY,JSON.stringify(fp));}catch(e){}}
 
@@ -1650,9 +1672,9 @@ async function fpLoadFromNotion(){
   var rows;
   try{rows=await queryDB(DB.fp);}catch(e){console.warn('FP 로드 실패',e.message);return;}
   var next={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[]};
-  var prevDue={};
-  (fp.fgoals||[]).forEach(function(g){if(g.name)prevDue[g.name]=g.due||'';});
-  next.memo=fp.memo||'';
+  var prevDue={},prevDone={};
+  (fp.fgoals||[]).forEach(function(g){if(g.name){prevDue[g.name]=g.due||'';prevDone[g.name]=!!g.done;}});
+  next.memo=fp.memo||'';next.memos=fp.memos||[];
   var cashId=null,goalId=null;
   rows.forEach(function(p){
     var pr=p.properties;
@@ -1674,7 +1696,7 @@ async function fpLoadFromNotion(){
     if(key==='income')item.cat=(cat==='목표')?'목표':'현재';
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
-    if(key==='fgoals'){item.target=amt;item.due=prevDue[name]||'';delete item.amt;}
+    if(key==='fgoals'){item.target=amt;item.due=prevDue[name]||'';item.done=!!prevDone[name];delete item.amt;}
     next[key].push(item);
   });
   fp=next; fp._cashId=cashId; fp._goalId=goalId;
@@ -1682,7 +1704,7 @@ async function fpLoadFromNotion(){
   await fpMigrateLocal();
   fpSave();
   /* FP 탭이 열려있으면 다시 렌더 */
-  if(fpEditing||fpEditingFG!==null)return;
+  if(fpEditing||fpEditingFG!==null||fpEditingMemo!==null)return;
   if(document.getElementById('page-fp')&&document.getElementById('page-fp').classList.contains('active'))fpRenderAll();
 }
 
@@ -1790,7 +1812,7 @@ function fpRenderAll(){
   /* 입력칸 현재값 반영 */
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
-  var mm=document.getElementById('fp-memo');if(mm&&document.activeElement!==mm)mm.value=fp.memo||'';
+  fpRenderMemos();
 }
 
 function fpMonthAnnual(month){
@@ -2143,16 +2165,18 @@ function fpRenderFGoals(){
         '<button class="fp-edit-cancel" onclick="fpCancelFG()">&#10005;</button></div>';
     }
     var pct=g.target>0?Math.min(100,Math.round(base/g.target*100)):0;
-    var done=pct>=100;
-    return '<div class="fp-fgoal">'+
-      '<div class="fp-fgoal-top" ondblclick="fpEditFGoal('+i+')" title="더블클릭하여 수정">'+
-        '<span class="fp-fgoal-name">'+escHtml(g.name)+'</span>'+
+    var autoDone=pct>=100;
+    var checked=!!g.done;
+    return '<div class="fp-fgoal'+(checked?' fp-fgoal-checked':'')+'">'+
+      '<div class="fp-fgoal-top">'+
+        '<input type="checkbox" class="fp-fgoal-chk" '+(checked?'checked':'')+' onclick="event.stopPropagation();fpToggleFGoal('+i+')">'+
+        '<span class="fp-fgoal-name" ondblclick="fpEditFGoal('+i+')" title="더블클릭하여 수정">'+escHtml(g.name)+'</span>'+
         (g.due?'<span class="fp-fgoal-due">'+escHtml(g.due)+'</span>':'')+
         '<span class="fp-fgoal-amt">'+won(g.target)+'</span>'+
         '<button class="fp-del" onclick="event.stopPropagation();fpDelFGoal('+i+')">&#10005;</button>'+
       '</div>'+
-      '<div class="fp-fgoal-bar"><div class="fp-fgoal-fill'+(done?' done':'')+'" style="width:'+pct+'%;"></div></div>'+
-      '<div class="fp-fgoal-pct"><span>'+(done?'✅ 달성!':'진행률 '+pct+'%')+'</span><span>'+wonShort(base)+' / '+wonShort(g.target)+'</span></div>'+
+      '<div class="fp-fgoal-bar"><div class="fp-fgoal-fill'+(autoDone||checked?' done':'')+'" style="width:'+(checked?100:pct)+'%;"></div></div>'+
+      '<div class="fp-fgoal-pct"><span>'+(checked?'✅ 달성 완료':(autoDone?'🎉 목표 도달!':'진행률 '+pct+'%'))+'</span><span>'+wonShort(base)+' / '+wonShort(g.target)+'</span></div>'+
     '</div>';
   }).join('');
 }
@@ -2192,17 +2216,48 @@ function fpDelFGoal(i){
   fp.fgoals.splice(i,1);fpSave();fpRenderAll();
   if(g&&g._nid){withSync(async function(){await deletePage(g._nid);});}
 }
-var fpMemoTimer=null;
-function fpMemoChanged(){
-  var el=document.getElementById('fp-memo');if(!el)return;
-  fp.memo=el.value;
-  var st=document.getElementById('fp-memo-status');if(st)st.textContent='저장 중...';
-  if(fpMemoTimer)clearTimeout(fpMemoTimer);
-  fpMemoTimer=setTimeout(function(){
-    fpSave();
-    var s=document.getElementById('fp-memo-status');if(s)s.textContent='✓ 저장됨 ('+new Date().toLocaleTimeString()+')';
-  },600);
+function fpToggleFGoal(i){
+  var g=fp.fgoals[i];if(!g)return;
+  g.done=!g.done;fpSave();fpRenderFGoals();
 }
+function fpMemoFmt(ts){var d=new Date(ts);function p(n){return(n<10?'0':'')+n;}return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
+function fpRenderMemos(){
+  var el=document.getElementById('fp-memo-list');if(!el)return;
+  if(!fp.memos||fp.memos.length===0){el.innerHTML='<div class="fp-empty">등록된 메모가 없습니다</div>';return;}
+  var ordered=fp.memos.map(function(m,i){return{m:m,i:i};}).sort(function(a,b){return (b.m.ts||0)-(a.m.ts||0);});
+  el.innerHTML=ordered.map(function(o){
+    if(fpEditingMemo===o.i){
+      return '<div class="fp-memo-post fp-memo-editing"><textarea id="fp-memo-edit" class="fp-memo-area">'+escHtml(o.m.text||'')+'</textarea>'+
+        '<div class="fp-memo-actions"><button class="fp-edit-ok" onclick="fpCommitMemo()">저장</button><button class="fp-edit-cancel" onclick="fpCancelMemo()">취소</button></div></div>';
+    }
+    var done=!!o.m.done;
+    return '<div class="fp-memo-post fp-memo-line'+(done?' fp-memo-done':'')+'">'+
+      '<input type="checkbox" class="fp-memo-chk" '+(done?'checked':'')+' onclick="fpToggleMemo('+o.i+')">'+
+      '<span class="fp-memo-date">'+fpMemoFmt(o.m.ts)+(o.m.edited?' (수정됨)':'')+'</span>'+
+      '<span class="fp-memo-text">'+escHtml(o.m.text).replace(/\n/g,' ')+'</span>'+
+      '<span class="fp-memo-btns"><button class="fp-memo-mini" onclick="fpEditMemo('+o.i+')">수정</button><button class="fp-memo-mini" onclick="fpDelMemo('+o.i+')">삭제</button></span></div>';
+  }).join('');
+}
+function fpAddMemo(){
+  var el=document.getElementById('fp-memo-input');if(!el)return;
+  var t=el.value.trim();if(!t){alert('내용을 입력하세요');return;}
+  if(!fp.memos)fp.memos=[];
+  fp.memos.push({text:t,ts:Date.now()});
+  el.value='';fpSave();fpRenderMemos();
+}
+function fpEditMemo(i){fpEditingMemo=i;fpRenderMemos();setTimeout(function(){var e=document.getElementById('fp-memo-edit');if(e){e.focus();}},0);}
+function fpCancelMemo(){fpEditingMemo=null;fpRenderMemos();}
+function fpCommitMemo(){
+  if(fpEditingMemo===null)return;
+  var m=fp.memos[fpEditingMemo];if(!m){fpEditingMemo=null;fpRenderMemos();return;}
+  var el=document.getElementById('fp-memo-edit');var t=(el?el.value:'').trim();if(!t){alert('내용을 입력하세요');return;}
+  m.text=t;m.edited=true;fpEditingMemo=null;fpSave();fpRenderMemos();
+}
+function fpDelMemo(i){
+  if(!confirm('이 메모를 삭제할까요?'))return;
+  fp.memos.splice(i,1);if(fpEditingMemo===i)fpEditingMemo=null;fpSave();fpRenderMemos();
+}
+function fpToggleMemo(i){var m=fp.memos[i];if(!m)return;m.done=!m.done;fpSave();fpRenderMemos();}
 function fpDel(kind,i){
   var item=fp[kind][i];
   fp[kind].splice(i,1);fpSave();fpRenderAll();
