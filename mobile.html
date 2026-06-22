@@ -257,10 +257,6 @@ body{
 .fp-fgoal-name{flex:1;font-weight:600;font-size:14px;}
 .fp-fgoal-due{font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:8px;flex-shrink:0;}
 .fp-fgoal-amt{font-size:12px;color:var(--text2);flex-shrink:0;}
-.fp-fgoal-bar{height:7px;border-radius:4px;background:var(--bg3);margin-top:8px;overflow:hidden;}
-.fp-fgoal-fill{height:100%;border-radius:4px;background:var(--meeting);transition:width .3s;}
-.fp-fgoal-fill.done{background:var(--teal);}
-.fp-fgoal-pct{font-size:10px;color:var(--text2);margin-top:4px;display:flex;justify-content:space-between;}
 .fp-fgoal-chk{width:20px;height:20px;cursor:pointer;flex-shrink:0;accent-color:var(--teal);}
 .fp-fgoal-checked .fp-fgoal-name{text-decoration:line-through;color:var(--text2);}
 .fp-fgoal-checked .fp-fgoal-amt{color:var(--text2);}
@@ -600,7 +596,7 @@ body{
             <input type="text" id="fp-fg-due" placeholder="기한" class="fp-rate-in" style="width:72px;">
             <button class="fp-btn-sm" onclick="fpAddFGoal()">추가</button>
           </div>
-          <div class="fp-hint">💡 보유현금+자산 대비 달성률 표시. 더블클릭하여 수정.</div>
+          <div class="fp-hint">💡 체크박스로 달성 여부 표시. 더블클릭하여 수정.</div>
         </div>
         <div class="card">
           <div class="fp-card-title">📝 메모 · 다짐</div>
@@ -2154,7 +2150,6 @@ function fpCommitEdit(){
 function fpRenderFGoals(){
   var el=document.getElementById('fp-fgoal-list');if(!el)return;
   if(!fp.fgoals||fp.fgoals.length===0){el.innerHTML='<div class="fp-empty">등록된 재무 목표가 없습니다</div>';return;}
-  var base=fp.cash+fpSum(fp.assets);
   el.innerHTML=fp.fgoals.map(function(g,i){
     if(fpEditingFG===i){
       return '<div class="fp-fgoal fp-row-edit" style="flex-wrap:wrap;">'+
@@ -2164,8 +2159,6 @@ function fpRenderFGoals(){
         '<button class="fp-edit-ok" onclick="fpCommitFG()">&#10003;</button>'+
         '<button class="fp-edit-cancel" onclick="fpCancelFG()">&#10005;</button></div>';
     }
-    var pct=g.target>0?Math.min(100,Math.round(base/g.target*100)):0;
-    var autoDone=pct>=100;
     var checked=!!g.done;
     return '<div class="fp-fgoal'+(checked?' fp-fgoal-checked':'')+'">'+
       '<div class="fp-fgoal-top">'+
@@ -2175,8 +2168,6 @@ function fpRenderFGoals(){
         '<span class="fp-fgoal-amt">'+won(g.target)+'</span>'+
         '<button class="fp-del" onclick="event.stopPropagation();fpDelFGoal('+i+')">&#10005;</button>'+
       '</div>'+
-      '<div class="fp-fgoal-bar"><div class="fp-fgoal-fill'+(autoDone||checked?' done':'')+'" style="width:'+(checked?100:pct)+'%;"></div></div>'+
-      '<div class="fp-fgoal-pct"><span>'+(checked?'✅ 달성 완료':(autoDone?'🎉 목표 도달!':'진행률 '+pct+'%'))+'</span><span>'+wonShort(base)+' / '+wonShort(g.target)+'</span></div>'+
     '</div>';
   }).join('');
 }
