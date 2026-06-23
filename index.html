@@ -562,8 +562,10 @@
           </select>
           <input type="text" id="fp-fix-name" placeholder="항목 (월세 등)" class="fp-name-in">
           <input type="text" id="fp-fix-amt" inputmode="numeric" placeholder="금액" class="fp-amt-in">
+          <select id="fp-fix-payday" class="fp-sel" title="납부일 (매월)"><option value="">납부일</option></select>
           <button class="btn btn-primary fp-btn-sm" onclick="fpAddFixed()">추가</button>
         </div>
+        <div class="fp-hint">💡 납부일을 정하면 이번 달 해당 날짜의 일간·주간 업무에 "○○ 내기" 할일이 자동 추가됩니다.</div>
       </div>
 
       <!-- 기타 지출 (일회성, 선택 연·월) -->
@@ -1730,6 +1732,38 @@ function selWeekByIdx(i){if(_weekKeyList[i])selWeekKey=_weekKeyList[i];checkWeek
 function toggleWeeklyByIdx(i){var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleWeekly(t.id,selWeekKey);}
 function doToggleWeekly(id,wk){var t=(cache.weekly[wk]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderWeeklyTasks();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
 function delWeeklyByIdx(i){var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=s[i];if(!t)return;cache.weekly[selWeekKey]=(cache.weekly[selWeekKey]||[]).filter(function(x){return x.id!==t.id;});renderWeeklyTasks();renderDashboard();withSync(function(){return deletePage(t.id);});}
+/* 특정 날짜(ds)의 일간 업무에 추가 (납부일 할일용) */
+async function _addDailyOnDate(ds,text,tag,pri){
+  if(!cache.daily[ds])cache.daily[ds]=[];
+  /* 같은 날짜에 동일 텍스트가 이미 있으면 중복 방지 */
+  if(cache.daily[ds].some(function(x){return x.text===text;}))return;
+  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:tag||'개인',pri:pri||'보통',isMeeting:false,meetingTime:'',isCarried:false,repeat:''};
+  cache.daily[ds].push(opt);
+  if(selDailyDate===ds&&typeof renderDailyTasks==='function')renderDailyTasks();
+  try{
+    var id=await createPage(DB.daily,{'업무':pTitle(text),'태그':pSelect(tag||'개인'),'우선순위':pSelect(pri||'보통'),'완료':pCheck(false),'날짜':pDate(ds)});
+    opt.id=id;
+  }catch(e){
+    cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x!==opt;});
+    console.error('납부일 일간 업무 저장 실패',e);
+  }
+}
+/* 특정 날짜(ds)가 속한 주의 주간 업무에 추가 */
+async function _addWeeklyOnDate(ds,text,tag,pri){
+  var ymPart=getYM(ds), wkPart=getWeekNum(ds)+'주', wk=ymPart+' '+wkPart;
+  if(!cache.weekly[wk])cache.weekly[wk]=[];
+  if(cache.weekly[wk].some(function(x){return x.text===text;}))return;
+  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:tag||'개인',pri:pri||'보통'};
+  cache.weekly[wk].push(opt);
+  if(selWeekKey===wk&&typeof renderWeeklyTasks==='function')renderWeeklyTasks();
+  try{
+    var id=await createPage(DB.weekly,{'업무':pTitle(text),'연월':pText(ymPart),'주차':pSelect(wkPart),'태그':pSelect(tag||'개인'),'우선순위':pSelect(pri||'보통'),'완료':pCheck(false)});
+    opt.id=id;
+  }catch(e){
+    cache.weekly[wk]=(cache.weekly[wk]||[]).filter(function(x){return x!==opt;});
+    console.error('납부일 주간 업무 저장 실패',e);
+  }
+}
 async function addWeeklyTask(){
   var v=document.getElementById('weekly-new').value.trim();if(!v)return;
   var tag=document.getElementById('weekly-tag').value,pri=document.getElementById('weekly-pri').value;
@@ -2030,6 +2064,7 @@ async function fpLoadFromNotion(){
     if(!key)return;
     var item={_nid:p.id,name:name,amt:amt};
     if(key==='fixed'||key==='assets')item.cat=cat||'기타';
+    if(key==='fixed'&&month)item.payday=month;
     if(key==='income')item.cat=(cat==='목표')?'목표':'현재';
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
@@ -2084,6 +2119,7 @@ async function fpMigrateLocal(){
 async function fpCreateNotion(kind,item){
   var props={'이름':pTitle(item.name||''),'구분':pSelect(FP_DIV[kind]),'금액':pNumber(kind==='fgoals'?(item.target||0):(item.amt||0))};
   if((kind==='fixed'||kind==='assets')&&item.cat)props['카테고리']=pSelect(item.cat);
+  if(kind==='fixed'&&item.payday)props['월']=pNumber(item.payday);
   if(kind==='income')props['카테고리']=pSelect(item.cat==='목표'?'목표':'현재');
   if(kind==='annual')props['월']=pNumber(item.month||1);
   if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
@@ -2158,6 +2194,7 @@ function fpRenderAll(){
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
   var mm=document.getElementById('fp-memo-input');/* 게시판 입력칸은 비우지 않음 */
   var od=document.getElementById('fp-oth-date');if(od&&!od.value){var t=new Date();od.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+  var pdSel=document.getElementById('fp-fix-payday');if(pdSel&&pdSel.options.length<=1){var oo='<option value="">납부일</option>';for(var dd=1;dd<=31;dd++)oo+='<option value="'+dd+'">'+dd+'일</option>';pdSel.innerHTML=oo;}
   fpRenderMemos();
 }
 
@@ -2265,7 +2302,8 @@ function fpRenderFixed(){
   var el=document.getElementById('fp-fixed-list');
   if(fp.fixed.length===0){el.innerHTML='<div class="fp-empty">등록된 고정비가 없습니다</div>';return;}
   el.innerHTML=fp.fixed.map(function(x,i){
-    return fpRow('fixed',i,'<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+
+    var pdBadge=x.payday?'<span class="fp-mtag" style="background:var(--purple-light);color:var(--purple-dark);">'+x.payday+'일</span>':'';
+    return fpRow('fixed',i,'<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+pdBadge+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
       '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'fixed\','+i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.fixed))+'</span><span style="width:18px;"></span></div>';
@@ -2443,11 +2481,33 @@ function fpAddFixed(){
   var n=document.getElementById('fp-fix-name').value.trim();
   var c=document.getElementById('fp-fix-cat').value;
   var a=fpNum(document.getElementById('fp-fix-amt').value);
+  var pdEl=document.getElementById('fp-fix-payday');
+  var payday=pdEl&&pdEl.value?parseInt(pdEl.value,10):0;
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  var item={name:n,cat:c,amt:a};fp.fixed.push(item);fpSave();
+  var item={name:n,cat:c,amt:a};
+  if(payday)item.payday=payday;
+  fp.fixed.push(item);fpSave();
   document.getElementById('fp-fix-name').value='';document.getElementById('fp-fix-amt').value='';
+  if(pdEl)pdEl.value='';
   fpRenderAll();
   withSync(async function(){item._nid=await fpCreateNotion('fixed',item);fpSave();});
+  /* 납부일이 있으면 이번 달 해당 날짜의 일간·주간 업무에 할일 자동 생성 */
+  if(payday)fpMakePaydayTask(n,a,payday);
+}
+/* 고정비 납부일 → 일간+주간 업무 자동 생성 */
+function fpMakePaydayTask(name,amt,payday){
+  try{
+    var now=new Date();
+    var y=now.getFullYear(), mo=now.getMonth(); /* 0-based */
+    /* 이번 달 말일 보정 (예: 31일 지정인데 그 달이 30일까지면 말일로) */
+    var lastDay=new Date(y,mo+1,0).getDate();
+    var day=Math.min(payday,lastDay);
+    var ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    var taskText=name+' 내기'+(amt?(' ('+won(amt)+')'):'');
+    /* 함수 존재 시에만(대시보드 로직) 호출 */
+    if(typeof _addDailyOnDate==='function')_addDailyOnDate(ds,taskText,'개인','보통');
+    if(typeof _addWeeklyOnDate==='function')_addWeeklyOnDate(ds,taskText,'개인','보통');
+  }catch(e){console.warn('납부일 할일 생성 실패',e);}
 }
 function fpAddAnnual(){
   var n=document.getElementById('fp-ann-name').value.trim();
@@ -2512,6 +2572,11 @@ function fpEditRowHtml(kind,item){
     h+='<select id="fp-edit-cat" class="fp-sel">'+cats.map(function(c){
       return '<option value="'+c+'"'+((item.cat||'기타')===c?' selected':'')+'>'+c+'</option>';
     }).join('')+'</select>';
+    if(kind==='fixed'){
+      var pdo='<option value="">납부일</option>';
+      for(var pd=1;pd<=31;pd++)pdo+='<option value="'+pd+'"'+((item.payday||0)===pd?' selected':'')+'>'+pd+'일</option>';
+      h+='<select id="fp-edit-payday" class="fp-sel">'+pdo+'</select>';
+    }
   }else if(kind==='annual'){
     h+='<select id="fp-edit-month" class="fp-sel">';
     for(var mo=1;mo<=12;mo++)h+='<option value="'+mo+'"'+((item.month||1)===mo?' selected':'')+'>'+mo+'월</option>';
@@ -2550,6 +2615,7 @@ function fpCommitEdit(){
   if(a<=0){alert('금액을 올바르게 입력하세요');if(amtEl)amtEl.focus();return;}
   item.name=n;item.amt=a;
   if(kind==='fixed'||kind==='assets'){var c=document.getElementById('fp-edit-cat');if(c)item.cat=c.value;}
+  if(kind==='fixed'){var pde=document.getElementById('fp-edit-payday');if(pde)item.payday=pde.value?parseInt(pde.value,10):0;}
   if(kind==='income'){var ic=document.getElementById('fp-edit-cat');if(ic)item.cat=(ic.value==='목표'?'목표':'현재');}
   if(kind==='annual'){var mo=document.getElementById('fp-edit-month');if(mo)item.month=parseInt(mo.value,10)||1;}
   if(kind==='debts'){var r=document.getElementById('fp-edit-rate');if(r)item.rate=fpFloat(r.value);}
@@ -2561,6 +2627,7 @@ function fpCommitEdit(){
     if(item._nid){
       var props={'이름':pTitle(item.name),'금액':pNumber(item.amt)};
       if((kind==='fixed'||kind==='assets')&&item.cat)props['카테고리']=pSelect(item.cat);
+      if(kind==='fixed')props['월']=pNumber(item.payday||0);
       if(kind==='income')props['카테고리']=pSelect(item.cat==='목표'?'목표':'현재');
       if(kind==='annual')props['월']=pNumber(item.month||1);
       if(kind==='debts')props['금리']=pNumber(item.rate||0);
