@@ -45,7 +45,7 @@
   .fp-subtab:hover{background:var(--bg2);}
   .fp-subtab.active{background:var(--purple-light);border-color:var(--purple);color:var(--purple-dark);font-weight:600;}
   .fp-month-nav{display:flex;align-items:center;gap:6px;}
-  .fp-month-label{font-size:14px;font-weight:700;min-width:64px;text-align:center;color:var(--text);}
+  .fp-month-label{font-size:14px;font-weight:700;min-width:96px;text-align:center;color:var(--text);}
   .fp-mbtn{width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:15px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;}
   .fp-mbtn:hover{background:var(--bg2);}
   .fp-mbtn-today{width:auto;padding:0 10px;font-size:12px;}
@@ -566,6 +566,19 @@
         </div>
       </div>
 
+      <!-- 기타 지출 (일회성, 선택 연·월) -->
+      <div class="card">
+        <div class="card-title">기타 지출 (일회성) · <span id="fp-others-title">이번 달</span></div>
+        <div id="fp-others-list"></div>
+        <div class="fp-add">
+          <input type="date" id="fp-oth-date" class="fp-sel" style="min-width:140px;">
+          <input type="text" id="fp-oth-name" placeholder="항목 (경조사비 등)" class="fp-name-in">
+          <input type="text" id="fp-oth-amt" inputmode="numeric" placeholder="금액" class="fp-amt-in">
+          <button class="btn btn-primary fp-btn-sm" onclick="fpAddOther()">추가</button>
+        </div>
+        <div class="fp-hint">💡 위 연·월 선택기에 맞는 그 달의 일회성 지출만 표시됩니다. 더블클릭하여 수정.</div>
+      </div>
+
       <!-- 연간 주요 지출 -->
       <div class="card">
         <div class="card-title">연간 주요 지출 (목돈 · 비정기)</div>
@@ -722,7 +735,8 @@ var DB = {
   monthly: '74a5bc52-bfe2-4d69-9a55-9bed245fbdaf',
   goals:   '3765e663-3065-4a2f-b521-ed017eb3d1d2',
   trips:   '5c4bf5d4-afd9-4f62-9952-23bec5cda3f6',
-  fp:      '60766992-bc30-4500-b486-58ad0ba2380b'
+  fp:      '60766992-bc30-4500-b486-58ad0ba2380b',
+  fpmemo:  '59eca043-a42a-4683-85e2-2e4599e7d724'
 };
 
 /* ============================================================
@@ -1969,16 +1983,17 @@ async function withSync(fn){
    노션이 master. 한 DB에 '구분' 필드로 수입/고정비/연간지출/자산/부채/설정 통합.
 ============================================================ */
 var FP_KEY='fp_data_v1';
-var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:'',memos:[]};
-/* 한눈에 보기에서 선택된 월 (1~12). 기본값=이번 달 */
+var fp={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],memo:'',memos:[],others:[]};
+/* 한눈에 보기에서 선택된 연·월. 기본값=이번 달 */
 var fpSelMonth=(new Date()).getMonth()+1;
+var fpSelYear=(new Date()).getFullYear();
 var fpEditingFG=null;
 var fpEditingMemo=null;
 /* 구분(노션) ↔ fp 배열 키 매핑 */
-var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채',fgoals:'재무목표'};
-var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts','재무목표':'fgoals'};
+var FP_DIV={income:'수입',fixed:'고정비',annual:'연간지출',assets:'자산',debts:'부채',fgoals:'재무목표',others:'기타지출'};
+var FP_DIV_REV={'수입':'income','고정비':'fixed','연간지출':'annual','자산':'assets','부채':'debts','재무목표':'fgoals','기타지출':'others'};
 function fpLoad(){
-  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||'',memos:d.memos||[]};}}catch(e){}
+  try{var raw=localStorage.getItem(FP_KEY);if(raw){var d=JSON.parse(raw);fp={cash:d.cash||0,saveGoal:d.saveGoal||0,income:d.income||[],fixed:d.fixed||[],annual:d.annual||[],assets:d.assets||[],debts:d.debts||[],fgoals:d.fgoals||[],memo:d.memo||'',memos:d.memos||[],others:d.others||[]};}}catch(e){}
   /* 기존 단일 메모 → 게시글 1개로 1회 이관 */
   if((!fp.memos||fp.memos.length===0)&&fp.memo&&fp.memo.trim()){
     fp.memos=[{text:fp.memo.trim(),ts:Date.now()}];fp.memo='';fpSave();
@@ -1991,10 +2006,8 @@ async function fpLoadFromNotion(){
   if(!DB.fp)return;
   var rows;
   try{rows=await queryDB(DB.fp);}catch(e){diag('⚠ FP 로드 실패: '+e.message,'#f80');return;}
-  var next={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[]};
-  /* 기한·달성체크는 로컬 전용 → 노션 로드 시 기존 로컬값 보존 */
-  var prevDue={},prevDone={};
-  (fp.fgoals||[]).forEach(function(g){if(g.name){prevDue[g.name]=g.due||'';prevDone[g.name]=!!g.done;}});
+  var next={cash:0,saveGoal:0,income:[],fixed:[],annual:[],assets:[],debts:[],fgoals:[],others:[]};
+  /* memos는 별도 DB(FP_메모)에서 로드 */
   next.memo=fp.memo||'';next.memos=fp.memos||[];
   var cashId=null,goalId=null;
   rows.forEach(function(p){
@@ -2005,6 +2018,9 @@ async function fpLoadFromNotion(){
     var cat=rSelect(pr,'카테고리');
     var month=rNumber(pr,'월');
     var rate=rNumber(pr,'금리');
+    var due=rText(pr,'기한');
+    var done=rCheck(pr,'완료');
+    var date=rDate(pr,'날짜');
     if(div==='설정'){
       if(name==='현금'){next.cash=amt;cashId=p.id;}
       else if(name==='저축목표'){next.saveGoal=amt;goalId=p.id;}
@@ -2017,10 +2033,13 @@ async function fpLoadFromNotion(){
     if(key==='income')item.cat=(cat==='목표')?'목표':'현재';
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
-    if(key==='fgoals'){item.target=amt;item.due=prevDue[name]||'';item.done=!!prevDone[name];delete item.amt;}
+    if(key==='fgoals'){item.target=amt;item.due=due||'';item.done=!!done;delete item.amt;}
+    if(key==='others')item.date=date||'';
     next[key].push(item);
   });
   fp=next; fp._cashId=cashId; fp._goalId=goalId;
+  /* 메모 게시판: 별도 DB(FP_메모)에서 로드 */
+  await fpLoadMemos();
   /* 기존 localStorage 데이터가 노션에 없으면 1회 마이그레이션 */
   await fpMigrateLocal();
   fpSave();
@@ -2068,6 +2087,8 @@ async function fpCreateNotion(kind,item){
   if(kind==='income')props['카테고리']=pSelect(item.cat==='목표'?'목표':'현재');
   if(kind==='annual')props['월']=pNumber(item.month||1);
   if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
+  if(kind==='fgoals'){props['기한']=pText(item.due||'');props['완료']=pCheck(!!item.done);}
+  if(kind==='others'&&item.date)props['날짜']=pDate(item.date);
   return await createPage(DB.fp,props);
 }
 
@@ -2126,6 +2147,7 @@ function fpRenderAll(){
   fpRenderAnnual();
   fpRenderAssets();
   fpRenderDebts();
+  fpRenderOthers();
   fpRenderNwSummary();
   fpRenderSaveFeedback();
   fpRenderEmergency();
@@ -2135,6 +2157,7 @@ function fpRenderAll(){
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
   var mm=document.getElementById('fp-memo-input');/* 게시판 입력칸은 비우지 않음 */
+  var od=document.getElementById('fp-oth-date');if(od&&!od.value){var t=new Date();od.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
   fpRenderMemos();
 }
 
@@ -2143,27 +2166,43 @@ function fpMonthAnnual(month){
   var items=fp.annual.filter(function(a){return (a.month||1)===month;});
   return {items:items, total:fpSum(items)};
 }
+/* 선택 연·월의 기타 일회성 지출 */
+function fpOthersForMonth(year,month){
+  var items=(fp.others||[]).filter(function(o){
+    if(!o.date)return false;
+    var parts=o.date.split('-');
+    return parseInt(parts[0],10)===year && parseInt(parts[1],10)===month;
+  });
+  return {items:items, total:fpSum(items)};
+}
 function fpMonthShift(delta){
-  fpSelMonth=((fpSelMonth-1+delta)%12+12)%12+1;
-  fpRenderSummary();
+  var d=new Date(fpSelYear, fpSelMonth-1+delta, 1);
+  fpSelYear=d.getFullYear();fpSelMonth=d.getMonth()+1;
+  fpRenderSummary();fpRenderOthers();
 }
 function fpMonthToday(){
-  fpSelMonth=(new Date()).getMonth()+1;
-  fpRenderSummary();
+  var d=new Date();fpSelYear=d.getFullYear();fpSelMonth=d.getMonth()+1;
+  fpRenderSummary();fpRenderOthers();
 }
 
 function fpRenderSummary(){
   var m=fpMetrics();
   var lbl=document.getElementById('fp-month-label');
-  if(lbl)lbl.textContent=fpSelMonth+'월';
+  if(lbl)lbl.textContent=fpSelYear+'년 '+fpSelMonth+'월';
   var ann=fpMonthAnnual(fpSelMonth);
-  /* 해당 월 주요지출 상세 (툴팁) */
-  var annDetail=ann.items.length?ann.items.map(function(a){return a.name+' '+wonShort(a.amt);}).join(', '):'없음';
+  var oth=fpOthersForMonth(fpSelYear,fpSelMonth);
+  /* 해당 월 실제지출 = 고정비 + 그달 연간주요지출 + 그달 기타지출 */
+  var monthSpend=m.fix+ann.total+oth.total;
+  var detailArr=[];
+  if(ann.items.length)detailArr.push('주요지출 '+wonShort(ann.total));
+  if(oth.items.length)detailArr.push('기타 '+wonShort(oth.total));
+  detailArr.push('고정비 '+wonShort(m.fix));
+  var detail=detailArr.join(' + ');
   var el=document.getElementById('fp-summary');
   el.innerHTML=
     '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.inc)+'</div><div class="fp-stat-label">월 수입</div></div>'+
     '<div class="fp-stat"><div class="fp-stat-val">'+wonShort(m.fix)+'</div><div class="fp-stat-label">월 고정비</div></div>'+
-    '<div class="fp-stat" title="'+escHtml(annDetail)+'"><div class="fp-stat-val '+(ann.total>0?'neg':'')+'">'+wonShort(ann.total)+'</div><div class="fp-stat-label">'+fpSelMonth+'월 주요지출</div></div>'+
+    '<div class="fp-stat" title="'+escHtml(detail)+'"><div class="fp-stat-val '+(monthSpend>0?'neg':'')+'">'+wonShort(monthSpend)+'</div><div class="fp-stat-label">'+fpSelMonth+'월 실제지출</div></div>'+
     '<div class="fp-stat"><div class="fp-stat-val '+(m.netWorth>=0?'pos':'neg')+'">'+wonShort(m.netWorth)+'</div><div class="fp-stat-label">순자산</div></div>';
 }
 
@@ -2253,6 +2292,37 @@ function fpRenderAssets(){
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">자산 합계(현금 제외)</span><span class="fp-amt" style="color:var(--teal);">'+won(fpSum(fp.assets))+'</span><span style="width:18px;"></span></div>';
 }
 
+function fpRenderOthers(){
+  var titleEl=document.getElementById('fp-others-title');
+  if(titleEl)titleEl.textContent=fpSelYear+'년 '+fpSelMonth+'월';
+  var el=document.getElementById('fp-others-list');if(!el)return;
+  var oth=fpOthersForMonth(fpSelYear,fpSelMonth);
+  if(oth.items.length===0){el.innerHTML='<div class="fp-empty">'+fpSelMonth+'월 기타 지출이 없습니다</div>';return;}
+  /* 날짜순 정렬 */
+  var ordered=oth.items.map(function(x){return{x:x,i:fp.others.indexOf(x)};}).sort(function(a,b){return (a.x.date<b.x.date?-1:1);});
+  el.innerHTML=ordered.map(function(o){
+    var dtag=o.x.date?o.x.date.slice(5).replace('-','/'):'';
+    return fpRow('others',o.i,'<div class="fp-row" ondblclick="fpEdit(\'others\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+dtag+'</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
+      '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
+      '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'others\','+o.i+')">&#10005;</button></div>');
+  }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">'+fpSelMonth+'월 기타 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(oth.total)+'</span><span style="width:18px;"></span></div>';
+}
+function fpAddOther(){
+  var dEl=document.getElementById('fp-oth-date');
+  var date=dEl?dEl.value:'';
+  var n=document.getElementById('fp-oth-name').value.trim();
+  var a=fpNum(document.getElementById('fp-oth-amt').value);
+  if(!date){alert('날짜를 선택하세요');return;}
+  if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
+  var item={name:n,amt:a,date:date};
+  if(!fp.others)fp.others=[];
+  fp.others.push(item);fpSave();
+  /* 입력한 날짜의 연·월로 화면 이동 */
+  var parts=date.split('-');fpSelYear=parseInt(parts[0],10);fpSelMonth=parseInt(parts[1],10);
+  document.getElementById('fp-oth-name').value='';document.getElementById('fp-oth-amt').value='';
+  fpRenderAll();
+  withSync(async function(){item._nid=await fpCreateNotion('others',item);fpSave();});
+}
 function fpRenderDebts(){
   var el=document.getElementById('fp-debt-list');if(!el)return;
   if(fp.debts.length===0){el.innerHTML='<div class="fp-empty">등록된 부채가 없습니다</div>';return;}
@@ -2448,6 +2518,8 @@ function fpEditRowHtml(kind,item){
     h+='</select>';
   }else if(kind==='debts'){
     h+='<input type="text" id="fp-edit-rate" inputmode="decimal" class="fp-rate-in" value="'+(item.rate||'')+'" placeholder="금리%" onkeydown="fpEditKey(event)">';
+  }else if(kind==='others'){
+    h+='<input type="date" id="fp-edit-date" class="fp-sel" value="'+(item.date||'')+'" style="min-width:130px;">';
   }
   /* 이름 + 금액 */
   h+='<input type="text" id="fp-edit-name" class="fp-name-in" value="'+escHtml(item.name||'')+'" onkeydown="fpEditKey(event)">';
@@ -2481,6 +2553,7 @@ function fpCommitEdit(){
   if(kind==='income'){var ic=document.getElementById('fp-edit-cat');if(ic)item.cat=(ic.value==='목표'?'목표':'현재');}
   if(kind==='annual'){var mo=document.getElementById('fp-edit-month');if(mo)item.month=parseInt(mo.value,10)||1;}
   if(kind==='debts'){var r=document.getElementById('fp-edit-rate');if(r)item.rate=fpFloat(r.value);}
+  if(kind==='others'){var de=document.getElementById('fp-edit-date');if(de)item.date=de.value;}
   fpEditing=null;
   fpSave();fpRenderAll();
   /* 노션 반영: _nid 있으면 update, 없으면 create */
@@ -2491,6 +2564,7 @@ function fpCommitEdit(){
       if(kind==='income')props['카테고리']=pSelect(item.cat==='목표'?'목표':'현재');
       if(kind==='annual')props['월']=pNumber(item.month||1);
       if(kind==='debts')props['금리']=pNumber(item.rate||0);
+      if(kind==='others'&&item.date)props['날짜']=pDate(item.date);
       await updatePage(item._nid,props);
     }else{
       item._nid=await fpCreateNotion(kind,item);
@@ -2549,7 +2623,7 @@ function fpCommitFG(){
   g.name=n;g.target=t;g.due=due;
   fpEditingFG=null;fpSave();fpRenderAll();
   withSync(async function(){
-    if(g._nid)await updatePage(g._nid,{'이름':pTitle(g.name),'금액':pNumber(g.target)});
+    if(g._nid)await updatePage(g._nid,{'이름':pTitle(g.name),'금액':pNumber(g.target),'기한':pText(g.due||''),'완료':pCheck(!!g.done)});
     else g._nid=await fpCreateNotion('fgoals',g);
     fpSave();
   });
@@ -2562,6 +2636,7 @@ function fpDelFGoal(i){
 function fpToggleFGoal(i){
   var g=fp.fgoals[i];if(!g)return;
   g.done=!g.done;fpSave();fpRenderFGoals();
+  if(g._nid){withSync(async function(){await updatePage(g._nid,{'완료':pCheck(!!g.done)});});}
 }
 /* ===== 메모·다짐 게시판 (로컬 저장) ===== */
 function fpMemoFmt(ts){
@@ -2592,15 +2667,37 @@ function fpRenderMemos(){
       '<button class="fp-memo-mini" onclick="fpDelMemo('+o.i+')">삭제</button></span></div>';
   }).join('');
 }
+function fpLoadMemos(){
+  return (async function(){
+    if(!DB.fpmemo)return;
+    var rows;
+    try{rows=await queryDB(DB.fpmemo);}catch(e){return;}
+    var arr=rows.map(function(p){
+      var pr=p.properties;
+      return {_nid:p.id,text:rTitle(pr,'내용'),ts:rNumber(pr,'작성일시')||Date.parse(p.created_time||'')||Date.now(),done:rCheck(pr,'완료')};
+    });
+    /* 노션이 비어있고 로컬에만 메모가 있으면 1회 업로드 */
+    if(arr.length===0 && fp.memos && fp.memos.length>0){
+      for(var i=0;i<fp.memos.length;i++){
+        var m=fp.memos[i];if(m._nid)continue;
+        try{m._nid=await createPage(DB.fpmemo,{'내용':pTitle(m.text||''),'작성일시':pNumber(m.ts||Date.now()),'완료':pCheck(!!m.done)});arr.push(m);}catch(e){}
+      }
+    }
+    fp.memos=arr;
+  })();
+}
 function fpAddMemo(){
   var el=document.getElementById('fp-memo-input');if(!el)return;
   var t=el.value.trim();if(!t){alert('내용을 입력하세요');return;}
   if(!fp.memos)fp.memos=[];
-  fp.memos.push({text:t,ts:Date.now()});
+  var item={text:t,ts:Date.now()};
+  fp.memos.push(item);
   el.value='';fpSave();fpRenderMemos();
+  withSync(async function(){
+    item._nid=await createPage(DB.fpmemo,{'내용':pTitle(item.text),'작성일시':pNumber(item.ts),'완료':pCheck(false)});
+    fpSave();
+  });
 }
-function fpEditMemo(i){fpEditingMemo=i;fpRenderMemos();setTimeout(function(){var e=document.getElementById('fp-memo-edit');if(e){e.focus();}},0);}
-function fpCancelMemo(){fpEditingMemo=null;fpRenderMemos();}
 function fpCommitMemo(){
   if(fpEditingMemo===null)return;
   var m=fp.memos[fpEditingMemo];if(!m){fpEditingMemo=null;fpRenderMemos();return;}
@@ -2608,17 +2705,24 @@ function fpCommitMemo(){
   var t=(el?el.value:'').trim();if(!t){alert('내용을 입력하세요');return;}
   m.text=t;m.edited=true;
   fpEditingMemo=null;fpSave();fpRenderMemos();
+  if(m._nid){withSync(async function(){await updatePage(m._nid,{'내용':pTitle(m.text)});});}
 }
 function fpDelMemo(i){
   if(!confirm('이 메모를 삭제할까요?'))return;
+  var m=fp.memos[i];
   fp.memos.splice(i,1);
   if(fpEditingMemo===i)fpEditingMemo=null;
   fpSave();fpRenderMemos();
+  if(m&&m._nid){withSync(async function(){await deletePage(m._nid);});}
 }
 function fpToggleMemo(i){
   var m=fp.memos[i];if(!m)return;
   m.done=!m.done;fpSave();fpRenderMemos();
+  if(m._nid){withSync(async function(){await updatePage(m._nid,{'완료':pCheck(!!m.done)});});}
 }
+function fpEditMemo(i){fpEditingMemo=i;fpRenderMemos();setTimeout(function(){var e=document.getElementById('fp-memo-edit');if(e){e.focus();}},0);}
+function fpCancelMemo(){fpEditingMemo=null;fpRenderMemos();}
+function fpCommitMemoOld_REMOVED(){}
 function fpDel(kind,i){
   var item=fp[kind][i];
   fp[kind].splice(i,1);fpSave();fpRenderAll();
