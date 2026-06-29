@@ -182,12 +182,15 @@
   .cal-title{font-size:16px;font-weight:600;}
   .cal-nav-btn{width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:transparent;cursor:pointer;font-size:16px;color:var(--text2);display:flex;align-items:center;justify-content:center;font-family:inherit;}
   .cal-nav-btn:hover{background:var(--bg2);}
+  .cal-wrap{display:flex;gap:10px;align-items:stretch;}
+  .cal-main{flex:1;min-width:0;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
   .dow{background:var(--bg2);padding:6px 0;text-align:center;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);}
   .dow.sun{color:#c0392b;} .dow.sat{color:var(--blue);}
-  .dcell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:5px 4px;min-height:72px;background:var(--bg);cursor:pointer;}
+  .dcell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:5px 4px;min-height:128px;background:var(--bg);cursor:pointer;overflow:hidden;}
   .dcell:nth-child(7n){border-right:none;}
   .dcell:hover{background:var(--bg2);}
+  .dcell.drop-target{background:var(--purple-light);outline:2px dashed var(--purple);outline-offset:-2px;}
   .dn{font-size:11px;color:var(--text2);line-height:1;margin-bottom:3px;}
   .dn.sun{color:#c0392b;} .dn.sat{color:var(--blue);}
   .dcell.other .dn{color:var(--text3);}
@@ -195,6 +198,16 @@
   .dcell.today .dn{color:var(--purple-dark);font-weight:700;}
   .dcell.holiday-cell{background:#FFF8F0;}
   .dcell.holiday-cell .dn{color:#FF6B35;}
+  .cal-week-panel{width:170px;flex-shrink:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);padding:8px;display:flex;flex-direction:column;}
+  .cal-week-panel .cwp-title{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:2px;}
+  .cal-week-panel .cwp-hint{font-size:9px;color:var(--text3);margin-bottom:8px;line-height:1.3;}
+  .cwp-task{display:flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 7px;margin-bottom:5px;cursor:grab;font-size:11px;}
+  .cwp-task:active{cursor:grabbing;}
+  .cwp-task.dragging{opacity:.45;}
+  .cwp-task .cwp-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cwp-task.done .cwp-txt{text-decoration:line-through;color:var(--text3);}
+  .cwp-empty{font-size:11px;color:var(--text3);padding:6px 2px;}
+  @media(max-width:760px){.cal-wrap{flex-direction:column;}.cal-week-panel{width:auto;}}
   .holiday-lbl{font-size:8px;color:#FF6B35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:1px;}
   .trip-bar{font-size:8px;padding:1px 3px;border-radius:2px;margin-bottom:1px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;}
   .trip-bar.trip{background:var(--trip-color);}
@@ -270,12 +283,16 @@
         <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
       </div>
     </div>
-    <div class="cal-grid" id="main-cal"></div>
+    <div class="cal-wrap">
+      <div class="cal-main"><div class="cal-grid" id="main-cal"></div></div>
+      <div class="cal-week-panel" id="cal-week-panel"></div>
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text2);">
       <span style="color:#FF6B35;">● 공휴일</span>
       <span style="color:var(--meeting);">● 미팅</span>
       <span style="color:var(--trip-color);">● 출장</span>
       <span style="color:var(--vacation-color);">● 휴가</span>
+      <span style="color:#BA7517;">● 지출</span>
     </div>
 
     <!-- 캘린더 바로 아래 오늘 할 일 (모바일 최적화) -->
@@ -1340,14 +1357,69 @@ function renderCal(){
     var inner='<div class="dn'+(sunsat&&c.cur?' '+sunsat:'')+'">'+c.d+'</div>';
     if(holiday&&c.cur)inner+='<span class="holiday-lbl">🔴'+escHtml(holiday)+'</span>';
     tripsDay.forEach(function(tr){inner+='<span class="trip-bar '+tr.type+'">'+escHtml(tr.name)+'</span>';});
-    fpExp.slice(0,2).forEach(function(x){inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+'">💰'+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';});
-    meetings.slice(0,2).forEach(function(t){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';});
-    normals.slice(0,2).forEach(function(t){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';});
-    var more=(meetings.length+normals.length)-4;if(more>0)inner+='<span class="dev" style="color:var(--text3);">+'+more+'개</span>';
-    h+='<div class="'+cls+'" onclick="'+(c.cur?'calClick(\''+ds+'\')':'')+'">' +inner+'</div>';
+    /* 셀당 최대 5개 표시 (지출 → 미팅 → 일반 순) */
+    var shown=0, MAXSHOW=5;
+    fpExp.forEach(function(x){if(shown<MAXSHOW){inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+'">💰'+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
+    meetings.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';shown++;}});
+    normals.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';shown++;}});
+    var totalItems=fpExp.length+meetings.length+normals.length;
+    var more=totalItems-shown;if(more>0)inner+='<span class="dev" style="color:var(--text3);">+'+more+'개</span>';
+    var dropAttrs=c.cur?' ondragover="calCellDragOver(event,this)" ondragleave="calCellDragLeave(this)" ondrop="calCellDrop(event,this,\''+ds+'\')"':'';
+    h+='<div class="'+cls+'" data-ds="'+ds+'"'+dropAttrs+' onclick="'+(c.cur?'calClick(\''+ds+'\')':'')+'">' +inner+'</div>';
   });
   document.getElementById('main-cal').innerHTML=h;
   document.getElementById('cal-title').textContent=calY+'년 '+(calM+1)+'월';
+  renderCalWeekPanel();
+}
+
+/* 캘린더 오른쪽 주간 업무 패널 — 드래그해서 날짜 칸에 떨어뜨리면 그 날짜에 일간 업무 생성 */
+function renderCalWeekPanel(){
+  var el=document.getElementById('cal-week-panel');if(!el)return;
+  var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
+  var wT=(cache.weekly[wKey]||[]).slice().sort(priSort);
+  var html='<div class="cwp-title">이번 주 업무</div><div class="cwp-hint">날짜 칸으로 드래그하면<br>그 날짜에 업무가 생겨요</div>';
+  if(wT.length===0){
+    html+='<div class="cwp-empty">이번 주 업무가 없어요</div>';
+  } else {
+    html+=wT.map(function(t,i){
+      return '<div class="cwp-task'+(t.done?' done':'')+'" draggable="true" '
+        +'ondragstart="calWeekDragStart(event,'+i+')" ondragend="calWeekDragEnd(this)" title="'+escHtml(t.text)+'">'
+        +'<span style="color:var(--text3);font-size:10px;flex-shrink:0;">⠿</span>'
+        +'<span class="cwp-txt">'+escHtml(t.text)+'</span>'
+        +'<span class="'+priCls(t.pri)+'" style="flex-shrink:0;">'+t.pri+'</span></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
+}
+
+/* 주간 패널 → 캘린더 날짜 칸 드래그 */
+var _calWeekDragIdx=null;
+function calWeekDragStart(e,i){
+  _calWeekDragIdx=i;
+  e.dataTransfer.effectAllowed='copy';
+  try{e.dataTransfer.setData('text/plain',String(i));}catch(_){}
+  if(e.target&&e.target.classList)e.target.classList.add('dragging');
+}
+function calWeekDragEnd(node){if(node&&node.classList)node.classList.remove('dragging');}
+function calCellDragOver(e,node){e.preventDefault();if(_calWeekDragIdx!==null){e.dataTransfer.dropEffect='copy';node.classList.add('drop-target');}}
+function calCellDragLeave(node){node.classList.remove('drop-target');}
+async function calCellDrop(e,node,ds){
+  e.preventDefault();e.stopPropagation();
+  node.classList.remove('drop-target');
+  if(_calWeekDragIdx===null||!ds)return;
+  var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
+  var wT=(cache.weekly[wKey]||[]).slice().sort(priSort);
+  var t=wT[_calWeekDragIdx];
+  _calWeekDragIdx=null;
+  if(!t)return;
+  /* 같은 날짜에 같은 업무가 이미 있으면 스킵 */
+  var exists=(cache.daily[ds]||[]).some(function(x){return x.text===t.text;});
+  if(exists){var dd=new Date(ds+'T00:00:00');alert((dd.getMonth()+1)+'/'+dd.getDate()+'에 이미 같은 업무가 있어요!');return;}
+  selDailyDate=ds;
+  try{
+    await _addDailyRaw(t.text,t.tag||'업무',t.pri||'보통',false,'',false);
+  }catch(err){return;}
+  renderCal();renderDailyTasks();renderDashboard();
 }
 function calClick(ds){
   selDailyDate=ds;
@@ -1465,6 +1537,7 @@ function renderDashboard(){
   var mEl=document.getElementById('dash-month');
   if(mEl)mEl.innerHTML=mHtml;
   renderExpenseReminders();
+  if(typeof renderCalWeekPanel==='function')renderCalWeekPanel();
 }
 
 /* 대시보드: 다가오는 주요 지출/기타 지출 리마인드 (앞으로 3개월) */
