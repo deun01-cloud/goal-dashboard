@@ -375,6 +375,7 @@ body{
           <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--purple)"/></svg>업무</span>
           <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--trip)"/></svg>출장</span>
           <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--vacation)"/></svg>휴가</span>
+          <span class="legend-i"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="#BA7517"/></svg>지출</span>
           <span class="legend-i" style="color:#FF6B35;">● 공휴일</span>
         </div>
       </div>
@@ -388,6 +389,7 @@ body{
       </div>
 
       <div id="today-meetings"></div>
+      <div id="today-expenses"></div>
       <!-- 이월 알림 -->
       <div id="carry-notice" style="display:none;background:var(--amber-light);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--amber-dark);">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -1025,6 +1027,22 @@ function renderToday(){
   }
   document.getElementById('today-meetings').innerHTML=mh;
 
+  // FP 지출 (선택된 날짜)
+  var fpExp=fpExpensesForDate(disp);
+  var expEl=document.getElementById('today-expenses');
+  if(expEl){
+    if(fpExp.length===0){expEl.innerHTML='';}
+    else{
+      expEl.innerHTML='<div class="section-h"><span>💰 지출</span></div>'+fpExp.map(function(x){
+        var tag=x.kind==='annual'?'연간':'기타';
+        return '<div class="task" style="border-left:3px solid #BA7517;">'
+          +'<span class="task-text">'+escHtml(x.name)+'</span>'
+          +'<span class="tag-s">'+tag+'</span>'
+          +'<span style="font-size:13px;font-weight:700;color:#BA7517;margin-left:auto;">'+wonShort(x.amt)+'</span></div>';
+      }).join('');
+    }
+  }
+
   document.getElementById('today-tasks-h').style.display=others.length>0?'flex':'none';
   document.getElementById('today-tasks-h-label').textContent = isToday ? '오늘 할 일' : (d.getMonth()+1)+'/'+d.getDate()+' 할 일';
 
@@ -1043,6 +1061,23 @@ function renderToday(){
 
   // 주간 업무 (선택된 날짜가 속한 주)
   renderTodayWeeklyTasks(disp);
+}
+
+// 캘린더용: 특정 날짜(YYYY-MM-DD)의 FP 지출. 연간 지출은 해당 월 1일에 표시
+function fpExpensesForDate(ds){
+  if(typeof fp==='undefined'||!fp||!ds)return [];
+  var parts=ds.split('-');
+  var y=parseInt(parts[0],10), m=parseInt(parts[1],10), d=parseInt(parts[2],10);
+  var out=[];
+  if(d===1){
+    (fp.annual||[]).forEach(function(x){
+      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt, kind:'annual'});
+    });
+  }
+  (fp.others||[]).forEach(function(x){
+    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt, kind:'other'});
+  });
+  return out;
 }
 
 // 오늘 페이지 풀 월간 캘린더
@@ -1073,6 +1108,7 @@ function renderTodayMonthGrid(){
     var hasTask=evs.some(function(t){return !(t.isMeeting||t.tag==='미팅');});
     var hasTrip=tripsDay.some(function(t){return t.type==='trip';});
     var hasVac=tripsDay.some(function(t){return t.type==='vacation';});
+    var hasExpense=fpExpensesForDate(ds).length>0;
     var sunsat=dow===0?'s':dow===6?'t':'';
     var cls='cell'+(c.cur?'':' other')+(isToday?' today':'')+(isSel&&!isToday?' sel':'')+(holi&&c.cur?' holi':'')+(sunsat?' '+sunsat:'');
     var dots='';
@@ -1080,6 +1116,7 @@ function renderTodayMonthGrid(){
     if(hasTask)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--purple)"/></svg>';
     if(hasTrip)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--trip)"/></svg>';
     if(hasVac)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="var(--vacation)"/></svg>';
+    if(hasExpense)dots+='<svg width="5" height="5" style="flex-shrink:0"><circle cx="2.5" cy="2.5" r="2.5" fill="#BA7517"/></svg>';
     html+='<button class="'+cls+'" onclick="todayMoSelect(\''+ds+'\')"><span class="num">'+c.d+'</span><div class="evs">'+dots+'</div></button>';
   });
   document.getElementById('today-month-grid').innerHTML=html;
@@ -1722,6 +1759,8 @@ async function fpLoadFromNotion(){
   /* 기존 localStorage 데이터가 노션에 없으면 1회 마이그레이션 */
   await fpMigrateLocal();
   fpSave();
+  /* 캘린더 지출 표시 갱신 */
+  if(typeof renderTodayMonthGrid==='function')renderTodayMonthGrid();
   /* FP 탭이 열려있으면 다시 렌더 */
   if(fpEditing||fpEditingFG!==null||fpEditingMemo!==null)return;
   if(document.getElementById('page-fp')&&document.getElementById('page-fp').classList.contains('active'))fpRenderAll();
@@ -1846,6 +1885,7 @@ function fpRenderAll(){
   var od=document.getElementById('fp-oth-date');if(od&&!od.value){var t=new Date();od.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
   var pdSel=document.getElementById('fp-fix-payday');if(pdSel&&pdSel.options.length<=1){var oo='<option value="">납부일</option>';for(var dd=1;dd<=31;dd++)oo+='<option value="'+dd+'">'+dd+'일</option>';pdSel.innerHTML=oo;}
   fpRenderMemos();
+  if(typeof renderTodayMonthGrid==='function')renderTodayMonthGrid();
 }
 
 function fpMonthAnnual(month){
