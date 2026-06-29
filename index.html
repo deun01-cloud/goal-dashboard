@@ -2072,6 +2072,12 @@ async function fpLoadFromNotion(){
     if(key==='others')item.date=date||'';
     next[key].push(item);
   });
+  /* 노션 응답으로 교체하기 전, 아직 노션 id가 없는(=업로드 안 된) 로컬 항목은 보존하여 유실 방지 */
+  ['income','fixed','annual','assets','debts','fgoals','others'].forEach(function(k){
+    (fp[k]||[]).forEach(function(x){
+      if(x&&!x._nid){next[k]=next[k]||[];next[k].push(x);}
+    });
+  });
   fp=next; fp._cashId=cashId; fp._goalId=goalId;
   /* 메모 게시판: 별도 DB(FP_메모)에서 로드 */
   await fpLoadMemos();
@@ -2091,19 +2097,20 @@ async function fpMigrateLocal(){
     var old=JSON.parse(raw);
     if(!old)return;
     /* 노션 항목과 name+amt 키로 중복 비교 */
+    function _mkey(k,x){return k+'|'+x.name+'|'+x.amt+(k==='annual'?'|'+(x.month||1):'')+(k==='others'?'|'+(x.date||''):'');}
     var keys={};
-    ['income','fixed','annual','assets','debts'].forEach(function(k){
-      (fp[k]||[]).forEach(function(x){keys[k+'|'+x.name+'|'+x.amt+(k==='annual'?'|'+(x.month||1):'')]=true;});
+    ['income','fixed','annual','assets','debts','others'].forEach(function(k){
+      (fp[k]||[]).forEach(function(x){keys[_mkey(k,x)]=true;});
     });
     var migrated=false;
-    var lists=['income','fixed','annual','assets','debts'];
+    var lists=['income','fixed','annual','assets','debts','others'];
     for(var li=0;li<lists.length;li++){
       var k=lists[li];
       var arr=old[k]||[];
       for(var i=0;i<arr.length;i++){
         var x=arr[i];
         if(!x||!x.name||x._nid)continue;             /* 이미 노션 id 있으면 skip */
-        if(keys[k+'|'+x.name+'|'+x.amt+(k==='annual'?'|'+(x.month||1):'')])continue;     /* 노션에 이미 동일 항목 있음 */
+        if(keys[_mkey(k,x)])continue;     /* 노션에 이미 동일 항목 있음 */
         var nid=await fpCreateNotion(k,x);
         x._nid=nid; fp[k].push(x); migrated=true;
       }
@@ -2125,7 +2132,15 @@ async function fpCreateNotion(kind,item){
   if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
   if(kind==='fgoals'){props['기한']=pText(item.due||'');props['완료']=pCheck(!!item.done);}
   if(kind==='others'&&item.date)props['날짜']=pDate(item.date);
-  return await createPage(DB.fp,props);
+  try{
+    return await createPage(DB.fp,props);
+  }catch(e){
+    /* 노션 DB에 '날짜' 속성이 없으면 날짜 빼고 재시도 (데이터 유실 방지) */
+    if(kind==='others'&&props['날짜']&&/날짜|property|does not exist|400/i.test(e.message||'')){
+      try{delete props['날짜'];diag('⚠ FP 노션 DB에 \'날짜\' 속성이 없어 날짜 없이 저장했습니다. 노션에서 날짜(Date) 속성을 추가하세요.','#f80');return await createPage(DB.fp,props);}catch(e2){throw e2;}
+    }
+    throw e;
+  }
 }
 
 /* 설정값(현금/저축목표) upsert: 기존 id 있으면 update, 없으면 create */
