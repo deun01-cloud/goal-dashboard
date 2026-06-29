@@ -335,6 +335,11 @@
       <div class="stat"><div class="stat-frac coral" id="ds-done-d-frac"><span class="done-n">-</span><span class="sep">/</span><span class="total-n">-</span></div><div class="stat-label">오늘 완료</div></div>
       <div class="stat"><div class="stat-frac purple" id="ds-done-m-frac"><span class="done-n">-</span><span class="sep">/</span><span class="total-n">-</span></div><div class="stat-label">이번 달 완료</div></div>
     </div>
+    <!-- 지출 리마인드 (FP 연간 주요 지출 + 기타 지출) -->
+    <div class="card" id="dash-expense-card" style="margin-top:14px;display:none;">
+      <div class="card-title">💰 다가오는 주요 지출 <span style="font-size:10px;color:var(--text3);font-weight:400;">앞으로 3개월</span></div>
+      <div id="dash-expense-list"></div>
+    </div>
   </div>
   <div id="goals" class="page">
     <div class="card">
@@ -1438,6 +1443,59 @@ function renderDashboard(){
     :mSorted.map(function(t,i){return'<div class="item-row"><div class="cb'+(t.done?' done':'')+'" onclick="dashToggleMonthly('+i+')"></div><span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span><span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';}).join('');
   var mEl=document.getElementById('dash-month');
   if(mEl)mEl.innerHTML=mHtml;
+  renderExpenseReminders();
+}
+
+/* 대시보드: 다가오는 주요 지출/기타 지출 리마인드 (앞으로 3개월) */
+function renderExpenseReminders(){
+  var card=document.getElementById('dash-expense-card');
+  var list=document.getElementById('dash-expense-list');
+  if(!card||!list)return;
+  if(typeof fp==='undefined'||!fp){card.style.display='none';return;}
+  var today=new Date();today.setHours(0,0,0,0);
+  var curY=today.getFullYear(), curM=today.getMonth()+1;
+  /* 앞으로 3개월 범위(이번 달 포함)의 마지막 날 */
+  var horizon=new Date(curY,curM-1+3,0);horizon.setHours(23,59,59,999);
+  var items=[];
+  /* 연간 주요 지출: 월만 있으므로 해당 월 1일을 기준일로. 올해 기준, 이미 지난 달이면 내년으로 이월 */
+  (fp.annual||[]).forEach(function(x){
+    if(!x.month||!x.amt)return;
+    var y=curY; if(x.month<curM)y=curY+1;
+    var d=new Date(y,x.month-1,1);d.setHours(0,0,0,0);
+    if(d>horizon)return;
+    items.push({date:d, name:x.name, amt:x.amt, kind:'annual', dayKnown:false});
+  });
+  /* 기타(일회성) 지출: 정확한 날짜. 오늘 이후~3개월 내 */
+  (fp.others||[]).forEach(function(x){
+    if(!x.date||!x.amt)return;
+    var d=new Date(x.date+'T00:00:00');if(isNaN(d))return;
+    if(d<today||d>horizon)return;
+    items.push({date:d, name:x.name, amt:x.amt, kind:'other', dayKnown:true});
+  });
+  if(items.length===0){card.style.display='none';return;}
+  items.sort(function(a,b){return a.date-b.date;});
+  var DAYS=['일','월','화','수','목','금','토'];
+  list.innerHTML=items.map(function(it){
+    var diffDays=Math.round((it.date-today)/86400000);
+    var thisMonth=(it.date.getFullYear()===curY && (it.date.getMonth()+1)===curM);
+    var color=thisMonth?'var(--meeting)':(diffDays<=45?'var(--coral)':'var(--text2)');
+    var bg=thisMonth?'var(--meeting)':(diffDays<=45?'var(--coral)':'var(--text3)');
+    var mm=it.date.getMonth()+1, dd=it.date.getDate();
+    var when=it.dayKnown?(mm+'/'+('0'+dd).slice(-2)+' ('+DAYS[it.date.getDay()]+')'):(mm+'월');
+    var dleft=diffDays<=0?'오늘':(diffDays===1?'내일':('D-'+diffDays));
+    var kindTag=it.kind==='annual'?'연간':'기타';
+    return '<div class="item-row" style="padding:7px 0;align-items:center;">'
+      +'<span style="display:inline-block;min-width:62px;font-size:11px;font-weight:600;color:'+color+';">'+when+'</span>'
+      +'<span style="display:inline-block;font-size:10px;color:#fff;background:'+bg+';border-radius:8px;padding:1px 7px;margin-right:8px;flex-shrink:0;">'+kindTag+'</span>'
+      +'<span class="item-text" style="flex:1;">'+escHtml(it.name)+'</span>'
+      +'<span style="font-size:11px;color:var(--text3);margin-right:10px;flex-shrink:0;">'+dleft+'</span>'
+      +'<span style="font-size:13px;font-weight:700;color:'+color+';flex-shrink:0;">'+wonShort(it.amt)+'</span></div>';
+  }).join('');
+  var total=items.reduce(function(s,x){return s+x.amt;},0);
+  list.innerHTML+='<div class="item-row" style="padding-top:8px;margin-top:4px;border-top:1px solid var(--border);">'
+    +'<span class="item-text" style="flex:1;font-weight:600;">3개월 합계</span>'
+    +'<span style="font-size:14px;font-weight:700;color:var(--meeting);">'+won(total)+'</span></div>';
+  card.style.display='block';
 }
 function dashToggleDaily(i){var s=td_sorted();var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
 function mobileTodayToggle(i){var s=(cache.daily[todayStr()]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
@@ -2084,6 +2142,8 @@ async function fpLoadFromNotion(){
   /* 기존 localStorage 데이터가 노션에 없으면 1회 마이그레이션 */
   await fpMigrateLocal();
   fpSave();
+  /* 대시보드 지출 리마인드 갱신 (FP 데이터 로드 후) */
+  if(typeof renderExpenseReminders==='function')renderExpenseReminders();
   /* FP 탭이 열려있으면 다시 렌더 */
   if(fpEditing||fpEditingFG!==null||fpEditingMemo!==null)return; /* 인라인 편집 중이면 백그라운드 새로고침이 편집을 덮어쓰지 않게 */
   if(document.getElementById('fp')&&document.getElementById('fp').classList.contains('active'))fpRenderAll();
@@ -2204,6 +2264,7 @@ function fpRenderAll(){
   fpRenderEmergency();
   fpRenderProjection();
   fpRenderFGoals();
+  if(typeof renderExpenseReminders==='function')renderExpenseReminders();
   /* 입력칸 현재값 반영 */
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
