@@ -202,6 +202,7 @@
   .dev{font-size:9px;padding:1px 4px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
   .dev-w{background:#B5D4F4;color:#0C447C;} .dev-meeting{background:var(--meeting-light);color:var(--meeting);font-weight:600;}
   .dev-h{background:#CECBF6;color:#3C3489;} .dev-p{background:#C0DD97;color:#27500A;} .dev-s{background:#FAC775;color:#633806;}
+  .dev-expense{background:#FAC775;color:#633806;font-weight:600;}
   .sync-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:14px;}
   .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;}
   .sync-dot.syncing{background:#BA7517;animation:pulse .8s infinite;}
@@ -1296,6 +1297,24 @@ function renderAll(){renderCal();renderDashboard();renderGoals();renderDailyTask
 /* ============================================================
    CALENDAR
 ============================================================ */
+/* 캘린더용: 특정 날짜(YYYY-MM-DD)의 FP 지출 항목들 반환. 연간 지출은 해당 월 1일에 표시 */
+function fpExpensesForDate(ds){
+  if(typeof fp==='undefined'||!fp||!ds)return [];
+  var parts=ds.split('-');
+  var y=parseInt(parts[0],10), m=parseInt(parts[1],10), d=parseInt(parts[2],10);
+  var out=[];
+  /* 연간 주요 지출: 월만 있으므로 1일에 표시 */
+  if(d===1){
+    (fp.annual||[]).forEach(function(x){
+      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt});
+    });
+  }
+  /* 기타 일회성 지출: 정확한 날짜 매칭 */
+  (fp.others||[]).forEach(function(x){
+    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt});
+  });
+  return out;
+}
 function renderCal(){
   var DOWS=['일','월','화','수','목','금','토'];
   var h=DOWS.map(function(d,i){return'<div class="dow'+(i===0?' sun':i===6?' sat':'')+'">' +d+'</div>';}).join('');
@@ -1310,6 +1329,7 @@ function renderCal(){
     var ds=c.cur?(calY+'-'+pad(calM+1)+'-'+pad(c.d)):'';
     var holiday=ds?HOLIDAYS[ds]:'';
     var tripsDay=ds?trips.filter(function(tr){return tr.start<=ds&&ds<=tr.end;}).slice(0,1):[];
+    var fpExp=ds?fpExpensesForDate(ds):[];
     var evs=ds&&cache.daily[ds]?cache.daily[ds].slice():[];
     /* 반복 가상 항목 추가 */
     if(ds){var reps=getRepeatsForDate(ds);if(reps.length)evs=evs.concat(reps);}
@@ -1320,6 +1340,7 @@ function renderCal(){
     var inner='<div class="dn'+(sunsat&&c.cur?' '+sunsat:'')+'">'+c.d+'</div>';
     if(holiday&&c.cur)inner+='<span class="holiday-lbl">🔴'+escHtml(holiday)+'</span>';
     tripsDay.forEach(function(tr){inner+='<span class="trip-bar '+tr.type+'">'+escHtml(tr.name)+'</span>';});
+    fpExp.slice(0,2).forEach(function(x){inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+'">💰'+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';});
     meetings.slice(0,2).forEach(function(t){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';});
     normals.slice(0,2).forEach(function(t){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';});
     var more=(meetings.length+normals.length)-4;if(more>0)inner+='<span class="dev" style="color:var(--text3);">+'+more+'개</span>';
@@ -2142,8 +2163,9 @@ async function fpLoadFromNotion(){
   /* 기존 localStorage 데이터가 노션에 없으면 1회 마이그레이션 */
   await fpMigrateLocal();
   fpSave();
-  /* 대시보드 지출 리마인드 갱신 (FP 데이터 로드 후) */
+  /* 대시보드 지출 리마인드 + 캘린더 갱신 (FP 데이터 로드 후) */
   if(typeof renderExpenseReminders==='function')renderExpenseReminders();
+  if(typeof renderCal==='function')renderCal();
   /* FP 탭이 열려있으면 다시 렌더 */
   if(fpEditing||fpEditingFG!==null||fpEditingMemo!==null)return; /* 인라인 편집 중이면 백그라운드 새로고침이 편집을 덮어쓰지 않게 */
   if(document.getElementById('fp')&&document.getElementById('fp').classList.contains('active'))fpRenderAll();
@@ -2265,6 +2287,7 @@ function fpRenderAll(){
   fpRenderProjection();
   fpRenderFGoals();
   if(typeof renderExpenseReminders==='function')renderExpenseReminders();
+  if(typeof renderCal==='function')renderCal();
   /* 입력칸 현재값 반영 */
   var c=document.getElementById('fp-cash');if(c&&document.activeElement!==c)c.value=fp.cash?fp.cash.toLocaleString('ko-KR'):'';
   var g=document.getElementById('fp-save-goal');if(g&&document.activeElement!==g)g.value=fp.saveGoal?fp.saveGoal.toLocaleString('ko-KR'):'';
