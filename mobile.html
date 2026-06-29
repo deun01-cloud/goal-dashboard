@@ -1034,7 +1034,7 @@ function renderToday(){
     if(fpExp.length===0){expEl.innerHTML='';}
     else{
       expEl.innerHTML='<div class="section-h"><span>💰 지출</span></div>'+fpExp.map(function(x){
-        var tag=x.kind==='annual'?'연간':'기타';
+        var tag=x.kind==='annual'?'연간':(x.kind==='fixed'?'고정':'기타');
         return '<div class="task" style="border-left:3px solid #BA7517;">'
           +'<span class="task-text">'+escHtml(x.name)+'</span>'
           +'<span class="tag-s">'+tag+'</span>'
@@ -1074,6 +1074,12 @@ function fpExpensesForDate(ds){
       if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt, kind:'annual'});
     });
   }
+  var lastDay=new Date(y,m,0).getDate();
+  (fp.fixed||[]).forEach(function(x){
+    if(!x.payday||!x.amt)return;
+    var pd=x.payday>lastDay?lastDay:x.payday;
+    if(pd===d)out.push({name:x.name, amt:x.amt, kind:'fixed'});
+  });
   (fp.others||[]).forEach(function(x){
     if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt, kind:'other'});
   });

@@ -1323,12 +1323,19 @@ function fpExpensesForDate(ds){
   /* 연간 주요 지출: 월만 있으므로 1일에 표시 */
   if(d===1){
     (fp.annual||[]).forEach(function(x){
-      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt});
+      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt, kind:'annual'});
     });
   }
+  /* 월 고정비: 매월 납부일(payday)에 표시. 그 달에 해당 일이 없으면 말일에 표시 */
+  var lastDay=new Date(y,m,0).getDate();
+  (fp.fixed||[]).forEach(function(x){
+    if(!x.payday||!x.amt)return;
+    var pd=x.payday>lastDay?lastDay:x.payday;
+    if(pd===d)out.push({name:x.name, amt:x.amt, kind:'fixed'});
+  });
   /* 기타 일회성 지출: 정확한 날짜 매칭 */
   (fp.others||[]).forEach(function(x){
-    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt});
+    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt, kind:'other'});
   });
   return out;
 }
@@ -1359,7 +1366,7 @@ function renderCal(){
     tripsDay.forEach(function(tr){inner+='<span class="trip-bar '+tr.type+'">'+escHtml(tr.name)+'</span>';});
     /* 셀당 최대 5개 표시 (지출 → 미팅 → 일반 순) */
     var shown=0, MAXSHOW=5;
-    fpExp.forEach(function(x){if(shown<MAXSHOW){inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+'">💰'+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
+    fpExp.forEach(function(x){if(shown<MAXSHOW){var icon=x.kind==='fixed'?'🔁':'💰';inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+(x.kind==='fixed'?' (고정비)':'')+'">'+icon+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
     meetings.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';shown++;}});
     normals.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';shown++;}});
     var totalItems=fpExp.length+meetings.length+normals.length;
@@ -1559,6 +1566,20 @@ function renderExpenseReminders(){
     if(d>horizon)return;
     items.push({date:d, name:x.name, amt:x.amt, kind:'annual', dayKnown:false});
   });
+  /* 월 고정비: 납부일(payday) 기준 다음 도래분 1회 표시 */
+  (fp.fixed||[]).forEach(function(x){
+    if(!x.payday||!x.amt)return;
+    /* 이번 달 납부일이 지났으면 다음 달로 */
+    var y=curY, mo=curM;
+    var lastThis=new Date(curY,curM,0).getDate();
+    var pdThis=x.payday>lastThis?lastThis:x.payday;
+    if(today.getDate()>pdThis){mo=curM+1;if(mo>12){mo=1;y=curY+1;}}
+    var lastTgt=new Date(y,mo,0).getDate();
+    var pd=x.payday>lastTgt?lastTgt:x.payday;
+    var d=new Date(y,mo-1,pd);d.setHours(0,0,0,0);
+    if(d>horizon)return;
+    items.push({date:d, name:x.name, amt:x.amt, kind:'fixed', dayKnown:true});
+  });
   /* 기타(일회성) 지출: 정확한 날짜. 오늘 이후~3개월 내 */
   (fp.others||[]).forEach(function(x){
     if(!x.date||!x.amt)return;
@@ -1577,7 +1598,7 @@ function renderExpenseReminders(){
     var mm=it.date.getMonth()+1, dd=it.date.getDate();
     var when=it.dayKnown?(mm+'/'+('0'+dd).slice(-2)+' ('+DAYS[it.date.getDay()]+')'):(mm+'월');
     var dleft=diffDays<=0?'오늘':(diffDays===1?'내일':('D-'+diffDays));
-    var kindTag=it.kind==='annual'?'연간':'기타';
+    var kindTag=it.kind==='annual'?'연간':(it.kind==='fixed'?'고정':'기타');
     return '<div class="item-row" style="padding:7px 0;align-items:center;">'
       +'<span style="display:inline-block;min-width:62px;font-size:11px;font-weight:600;color:'+color+';">'+when+'</span>'
       +'<span style="display:inline-block;font-size:10px;color:#fff;background:'+bg+';border-radius:8px;padding:1px 7px;margin-right:8px;flex-shrink:0;">'+kindTag+'</span>'
@@ -2474,11 +2495,38 @@ function fpRenderFixed(){
   var el=document.getElementById('fp-fixed-list');
   if(fp.fixed.length===0){el.innerHTML='<div class="fp-empty">등록된 고정비가 없습니다</div>';return;}
   el.innerHTML=fp.fixed.map(function(x,i){
-    var pdBadge=x.payday?'<span class="fp-mtag" style="background:var(--purple-light);color:var(--purple-dark);">'+x.payday+'일</span>':'';
+    var pdBadge=x.payday
+      ? '<span class="fp-mtag" onclick="event.stopPropagation();fpSetFixedPayday('+i+')" title="클릭하여 납부일 변경" style="background:var(--purple-light);color:var(--purple-dark);cursor:pointer;">'+x.payday+'일</span>'
+      : '<span class="fp-mtag" onclick="event.stopPropagation();fpSetFixedPayday('+i+')" title="클릭하여 납부일 지정" style="background:var(--bg2);color:var(--text3);cursor:pointer;border:1px dashed var(--border2);">+날짜</span>';
     return fpRow('fixed',i,'<div class="fp-row" ondblclick="fpEdit(\'fixed\','+i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-cat">'+escHtml(x.cat||'기타')+'</span><span class="fp-name">'+escHtml(x.name)+'</span>'+pdBadge+
       '<span class="fp-amt">'+won(x.amt)+'</span>'+
       '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'fixed\','+i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(fpSum(fp.fixed))+'</span><span style="width:18px;"></span></div>';
+}
+
+/* 고정비 납부일 빠른 지정 (배지 클릭) */
+function fpSetFixedPayday(i){
+  var x=fp.fixed[i];if(!x)return;
+  var cur=x.payday||'';
+  var v=prompt('"'+x.name+'" 납부일을 입력하세요 (1~31, 비우면 삭제)',cur);
+  if(v===null)return;
+  v=v.trim();
+  if(v===''){
+    delete x.payday;
+  } else {
+    var d=parseInt(v,10);
+    if(isNaN(d)||d<1||d>31){alert('1부터 31 사이의 숫자를 입력하세요.');return;}
+    x.payday=d;
+  }
+  fpSave();
+  fpRenderFixed();
+  if(typeof renderCal==='function')renderCal();
+  /* 노션에도 납부일(월) 반영 */
+  if(x._nid){
+    withSync(function(){return updatePage(x._nid,{'월':pNumber(x.payday||0)});});
+  }
+  /* 납부일 지정 시 이번 달 해당 날짜에 "○○ 내기" 할일 자동 생성 */
+  if(x.payday)fpMakePaydayTask(x.name,x.amt,x.payday);
 }
 
 function fpRenderAnnual(){
