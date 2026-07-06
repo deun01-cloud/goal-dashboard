@@ -136,6 +136,7 @@
   .tag-h{background:var(--purple-light);color:var(--purple-dark);}
   .tag-m{background:var(--meeting-light);color:var(--meeting);}
   .tag-s{background:var(--amber-light);color:var(--amber-dark);}
+  .tag-f{background:var(--teal-light,#d1f5ea);color:var(--teal);}
   .pri-badge{font-size:11px;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0;cursor:pointer;}
   .pri-badge:hover{opacity:.75;}
   .pri-high{background:var(--red-light);color:var(--red-dark);}
@@ -393,7 +394,7 @@
       <div id="daily-list"></div>
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="daily-new" placeholder="새 업무 추가..." onkeydown="if(event.key==='Enter')addDailyTask()" style="flex:2;">
-        <select id="daily-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="학습">학습</option></select>
+        <select id="daily-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="재무">재무</option><option value="학습">학습</option></select>
         <select id="daily-pri"><option value="높음">높음</option><option value="보통">보통</option><option value="낮음">낮음</option></select>
         <select id="daily-repeat" title="반복 설정">
           <option value="">반복 없음</option>
@@ -789,7 +790,9 @@ function pad(n){return String(n).padStart(2,'0');}
 function fmt(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function todayStr(){return fmt(TODAY);}
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function tagCls(t){return 'tag tag-'+(t==='업무'?'w':t==='개인'?'p':t==='건강'?'h':t==='미팅'?'m':'s');}
+/* 기타 지출 입금 업무 숨김 마커 제거 (화면 표시용) */
+function stripMk(s){return String(s||'').replace(/\s*〖입금:[^〗]*〗/g,'').trim();}
+function tagCls(t){return 'tag tag-'+(t==='업무'?'w':t==='개인'?'p':t==='건강'?'h':t==='미팅'?'m':t==='재무'?'f':'s');}
 function priCls(p){return 'pri-badge pri-'+(p==='높음'?'high':p==='보통'?'mid':'low');}
 function devCls(t){return t==='미팅'?'dev-meeting':t==='건강'?'dev-h':t==='학습'?'dev-s':t==='개인'?'dev-p':'dev-w';}
 function getWeekNum(ds){var d=new Date(ds+'T00:00:00'),f=new Date(d.getFullYear(),d.getMonth(),1);return Math.ceil((d.getDate()+f.getDay())/7);}
@@ -1367,8 +1370,8 @@ function renderCal(){
     /* 셀당 최대 5개 표시 (지출 → 미팅 → 일반 순) */
     var shown=0, MAXSHOW=5;
     fpExp.forEach(function(x){if(shown<MAXSHOW){var icon=x.kind==='fixed'?'🔁':'💰';inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+(x.kind==='fixed'?' (고정비)':'')+'">'+icon+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
-    meetings.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(t.text)+'</span>';shown++;}});
-    normals.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(t.text)+'</span>';shown++;}});
+    meetings.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(stripMk(t.text))+'</span>';shown++;}});
+    normals.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(stripMk(t.text))+'</span>';shown++;}});
     var totalItems=fpExp.length+meetings.length+normals.length;
     var more=totalItems-shown;if(more>0)inner+='<span class="dev" style="color:var(--text3);">+'+more+'개</span>';
     var dropAttrs=c.cur?' ondragover="calCellDragOver(event,this)" ondragleave="calCellDragLeave(this)" ondrop="calCellDrop(event,this,\''+ds+'\')"':'';
@@ -1390,9 +1393,9 @@ function renderCalWeekPanel(){
   } else {
     html+=wT.map(function(t,i){
       return '<div class="cwp-task'+(t.done?' done':'')+'" draggable="true" '
-        +'ondragstart="calWeekDragStart(event,'+i+')" ondragend="calWeekDragEnd(this)" title="'+escHtml(t.text)+'">'
+        +'ondragstart="calWeekDragStart(event,'+i+')" ondragend="calWeekDragEnd(this)" title="'+escHtml(stripMk(t.text))+'">'
         +'<span style="color:var(--text3);font-size:10px;flex-shrink:0;">⠿</span>'
-        +'<span class="cwp-txt">'+escHtml(t.text)+'</span>'
+        +'<span class="cwp-txt">'+escHtml(stripMk(t.text))+'</span>'
         +'<span class="'+priCls(t.pri)+'" style="flex-shrink:0;">'+t.pri+'</span></div>';
     }).join('');
   }
@@ -1477,7 +1480,7 @@ function renderDashboard(){
       return'<div class="item-row'+(isMtg?' meeting-row':'')+'" style="padding:6px 0;">'
         +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
         +'<div class="cb'+(t.done?' done':'')+'" onclick="dashToggleDaily('+i+')"></div>'
-        +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+        +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
         +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';
     }).join('')+(tdSorted.length>8?'<div style="font-size:12px;color:var(--text3);padding:4px 0;">+ '+(tdSorted.length-8)+'개 더</div>':'');
 
@@ -1502,7 +1505,7 @@ function renderDashboard(){
         return'<div class="item-row'+(isMtg?' meeting-row':'')+'">'
           +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
           +'<div class="cb'+(t.done?' done':'')+'" onclick="mobileTodayToggle('+i+')"></div>'
-          +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+          +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
           +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
           +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';
       }).join('');
@@ -1520,7 +1523,7 @@ function renderDashboard(){
       return'<div class="item-row" draggable="true" ondragstart="dashWeekDragStart(event,'+i+')" style="cursor:grab;">'
         +'<span style="color:var(--text3);font-size:12px;padding:0 4px;flex-shrink:0;">⠿</span>'
         +'<div class="cb'+(t.done?' done':'')+'" onclick="dashToggleWeekly('+i+')"></div>'
-        +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+        +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
         +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';
     }).join('');
@@ -1540,7 +1543,7 @@ function renderDashboard(){
   var mSorted=mT.slice().sort(priSort);
   var mHtml='<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;font-weight:500;">'+(TODAY.getMonth()+1)+'월</span><span style="font-size:12px;color:var(--text2);">'+mT.filter(function(t){return t.done;}).length+'/'+mT.length+' 완료</span></div>';
   mHtml+=mSorted.length===0?'<div style="color:var(--text3);font-size:13px;">월간 업무 탭에서 추가하세요</div>'
-    :mSorted.map(function(t,i){return'<div class="item-row"><div class="cb'+(t.done?' done':'')+'" onclick="dashToggleMonthly('+i+')"></div><span class="item-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span><span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';}).join('');
+    :mSorted.map(function(t,i){return'<div class="item-row"><div class="cb'+(t.done?' done':'')+'" onclick="dashToggleMonthly('+i+')"></div><span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span><span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';}).join('');
   var mEl=document.getElementById('dash-month');
   if(mEl)mEl.innerHTML=mHtml;
   renderExpenseReminders();
@@ -1757,7 +1760,7 @@ function renderDailyTasks(){
       +'<span class="drag-handle">⠿</span>'
       +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDailyByIdx('+i+')"></div>'
-      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditDaily('+i+',this)">'+escHtml(t.text)+'</span>'
+      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditDaily('+i+',this)">'+escHtml(stripMk(t.text))+'</span>'
       +(t.isCarried?'<span class="carry-badge">이월</span>':'')
       +repBadge
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
@@ -1773,7 +1776,7 @@ function renderDailyTasks(){
       html+='<div class="item-row repeat-row'+(isMtg?' meeting-row':'')+'" onclick="jumpToRepeatSrc(\''+t.srcDate+'\')" title="원본 일자(' +t.srcDate+ ')로 이동" style="cursor:pointer;opacity:.85;">'
         +'<span class="drag-handle">🔁</span>'
         +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
-        +'<span class="item-text" style="color:var(--text2);">'+escHtml(t.text)+'</span>'
+        +'<span class="item-text" style="color:var(--text2);">'+escHtml(stripMk(t.text))+'</span>'
         +'<span class="repeat-badge">'+t.repeat+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
         +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
@@ -1813,7 +1816,25 @@ function delDailyByIdx(i){
   renderDailyTasks();renderCal();renderDashboard();
   withSync(function(){return deletePage(t.id);});
 }
-function doToggleDaily(id,ds){var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderDailyTasks();renderCal();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});}
+function doToggleDaily(id,ds){var t=(cache.daily[ds]||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;renderDailyTasks();renderCal();renderDashboard();withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+  /* 기타 지출 입금 업무면 연결된 기타 지출 항목 입금완료 상태도 동기화 */
+  if(typeof fpSyncOtherFromTask==='function')fpSyncOtherFromTask(t);}
+/* 일간 업무(입금 마커 포함) 완료 토글 → 연결된 기타 지출 항목 paid 동기화 */
+function fpSyncOtherFromTask(task){
+  if(!task||(task.text||'').indexOf('〖입금:')<0)return;
+  if(!fp.others)return;
+  for(var i=0;i<fp.others.length;i++){
+    var it=fp.others[i];
+    if((task.text||'').indexOf(fpOtherMarker(it))>=0){
+      if(it.paid!==task.done){
+        it.paid=task.done;fpSave();
+        if(document.getElementById('fp-others-list'))fpRenderOthers();
+        if(it._nid)withSync(function(){return updatePage(it._nid,{'완료':pCheck(!!it.paid)});});
+      }
+      return;
+    }
+  }
+}
 async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat){
   var ds=selDailyDate;
   var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried,repeat:repeat||''};
@@ -1891,7 +1912,7 @@ function renderWeeklyTasks(){
     html+='<div class="item-row" draggable="true" ondragstart="_wDrag='+i+'" ondragover="event.preventDefault()" ondrop="_dropWeekly(event,'+i+')">'
       +'<span class="drag-handle">⠿</span>'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleWeeklyByIdx('+i+')"></div>'
-      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditWeekly('+i+',this)">'+escHtml(t.text)+'</span>'
+      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditWeekly('+i+',this)">'+escHtml(stripMk(t.text))+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleWeeklyPri('+i+')" title="클릭하여 변경">'+t.pri+'</span>'
       +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'weekly\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
@@ -1976,7 +1997,7 @@ function renderMonthlyTasks(){
     html+='<div class="item-row" draggable="true" ondragstart="_mDrag='+i+'" ondragover="event.preventDefault()" ondrop="_dropMonthly(event,'+i+')">'
       +'<span class="drag-handle">⠿</span>'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthlyByIdx('+i+')"></div>'
-      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditMonthly('+i+',this)">'+escHtml(t.text)+'</span>'
+      +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditMonthly('+i+',this)">'+escHtml(stripMk(t.text))+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'" onclick="cycleMonthlyPri('+i+')" title="클릭하여 변경">'+t.pri+'</span>'
       +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'monthly\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
@@ -2159,7 +2180,7 @@ function exportICS(){
     (cache.daily[ds]||[]).forEach(function(t){
       if(!t.isMeeting&&t.tag!=='미팅')return;
       var dt=ds.replace(/-/g,'');
-      var ev=['BEGIN:VEVENT','UID:mtg-'+t.id+'@dashboard','DTSTART;VALUE=DATE:'+dt,'DTEND;VALUE=DATE:'+dt,'SUMMARY:📅 '+t.text+(t.meetingTime?' ('+t.meetingTime+')':'')];
+      var ev=['BEGIN:VEVENT','UID:mtg-'+t.id+'@dashboard','DTSTART;VALUE=DATE:'+dt,'DTEND;VALUE=DATE:'+dt,'SUMMARY:📅 '+stripMk(t.text)+(t.meetingTime?' ('+t.meetingTime+')':'')];
       var rr=repToRRule(t.repeat);if(rr)ev.push(rr);
       ev.push('END:VEVENT');
       lines.push.apply(lines,ev);
@@ -2242,7 +2263,7 @@ async function fpLoadFromNotion(){
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
     if(key==='fgoals'){item.target=amt;item.due=due||'';item.done=!!done;delete item.amt;}
-    if(key==='others')item.date=date||'';
+    if(key==='others'){item.date=date||'';item.paid=!!done;}
     next[key].push(item);
   });
   /* 노션 응답으로 교체하기 전, 아직 노션 id가 없는(=업로드 안 된) 로컬 항목은 보존하여 유실 방지 */
@@ -2308,6 +2329,7 @@ async function fpCreateNotion(kind,item){
   if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
   if(kind==='fgoals'){props['기한']=pText(item.due||'');props['완료']=pCheck(!!item.done);}
   if(kind==='others'&&item.date)props['날짜']=pDate(item.date);
+  if(kind==='others')props['완료']=pCheck(!!item.paid);
   try{
     return await createPage(DB.fp,props);
   }catch(e){
@@ -2560,10 +2582,25 @@ function fpRenderOthers(){
   var ordered=oth.items.map(function(x){return{x:x,i:fp.others.indexOf(x)};}).sort(function(a,b){return (a.x.date<b.x.date?-1:1);});
   el.innerHTML=ordered.map(function(o){
     var dtag=o.x.date?o.x.date.slice(5).replace('-','/'):'';
-    return fpRow('others',o.i,'<div class="fp-row" ondblclick="fpEdit(\'others\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+dtag+'</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
-      '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
+    var paid=!!o.x.paid;
+    var cb='<div class="cb'+(paid?' done':'')+'" onclick="event.stopPropagation();fpToggleOtherPaid('+o.i+')" title="'+(paid?'입금완료 (클릭하여 해제)':'클릭하면 입금완료 처리')+'" style="flex:none;margin-right:2px;"></div>';
+    var nameStyle=paid?' style="text-decoration:line-through;color:var(--text3);"':'';
+    var paidTag=paid?'<span class="fp-mtag" style="background:var(--teal-light,#d1f5ea);color:var(--teal);">입금완료</span>':'';
+    return fpRow('others',o.i,'<div class="fp-row" ondblclick="fpEdit(\'others\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;">'+cb+'<span class="fp-mtag">'+dtag+'</span><span class="fp-name"'+nameStyle+'>'+escHtml(o.x.name)+'</span>'+paidTag+
+      '<span class="fp-amt"'+(paid?' style="color:var(--text3);"':'')+'>'+won(o.x.amt)+'</span>'+
       '<button class="del-btn" onclick="event.stopPropagation();fpDel(\'others\','+o.i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">'+fpSelMonth+'월 기타 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(oth.total)+'</span><span style="width:18px;"></span></div>';
+}
+/* 기타 지출 ↔ 입금 업무 연결용 숨김 마커. 재로드 후에도 텍스트로 매칭 */
+function fpOtherMarker(item){return '〖입금:'+(item.date||'')+'|'+(item.name||'')+'|'+(item.amt||0)+'〗';}
+function fpOtherTaskText(item){return (item.name||'')+' 입금'+(item.amt?(' ('+won(item.amt)+')'):'')+' '+fpOtherMarker(item);}
+/* 특정 others 항목에 연결된 일간 업무 찾기 (마커로 매칭) */
+function fpFindOtherTask(item){
+  var ds=item.date;if(!ds)return null;
+  var mk=fpOtherMarker(item);
+  var arr=cache.daily[ds]||[];
+  for(var i=0;i<arr.length;i++){if((arr[i].text||'').indexOf(mk)>=0)return{task:arr[i],ds:ds};}
+  return null;
 }
 function fpAddOther(){
   var dEl=document.getElementById('fp-oth-date');
@@ -2572,7 +2609,7 @@ function fpAddOther(){
   var a=fpNum(document.getElementById('fp-oth-amt').value);
   if(!date){alert('날짜를 선택하세요');return;}
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  var item={name:n,amt:a,date:date};
+  var item={name:n,amt:a,date:date,paid:false};
   if(!fp.others)fp.others=[];
   fp.others.push(item);fpSave();
   /* 입력한 날짜의 연·월로 화면 이동 */
@@ -2580,6 +2617,24 @@ function fpAddOther(){
   document.getElementById('fp-oth-name').value='';document.getElementById('fp-oth-amt').value='';
   fpRenderAll();
   withSync(async function(){item._nid=await fpCreateNotion('others',item);fpSave();});
+  /* 해당 날짜에 "○○ 입금" 일간 업무 자동 생성 (재무 태그) */
+  if(typeof _addDailyOnDate==='function')_addDailyOnDate(date,fpOtherTaskText(item),'재무','보통');
+}
+/* 기타 지출 입금완료 토글 (기타 지출 카드에서 체크) → 연결된 일간 업무도 함께 동기화 */
+function fpToggleOtherPaid(i){
+  var item=fp.others&&fp.others[i];if(!item)return;
+  item.paid=!item.paid;fpSave();fpRenderOthers();
+  /* FP 노션 페이지 완료 체크 동기화 */
+  if(item._nid)withSync(function(){return updatePage(item._nid,{'완료':pCheck(!!item.paid)});});
+  /* 연결된 일간 업무 완료 상태도 맞춤 */
+  var link=fpFindOtherTask(item);
+  if(link&&link.task.done!==item.paid){
+    link.task.done=item.paid;
+    if(typeof renderDailyTasks==='function')renderDailyTasks();
+    if(typeof renderCal==='function')renderCal();
+    if(typeof renderDashboard==='function')renderDashboard();
+    if(String(link.task.id).indexOf('temp-')!==0)withSync(function(){return updatePage(link.task.id,{'완료':pCheck(!!item.paid)});});
+  }
 }
 function fpRenderDebts(){
   var el=document.getElementById('fp-debt-list');if(!el)return;
@@ -3012,6 +3067,19 @@ function fpCancelMemo(){fpEditingMemo=null;fpRenderMemos();}
 function fpCommitMemoOld_REMOVED(){}
 function fpDel(kind,i){
   var item=fp[kind][i];
+  /* 기타 지출 삭제 시 연결된 입금 일간 업무도 함께 삭제 */
+  if(kind==='others'&&item){
+    var link=fpFindOtherTask(item);
+    if(link){
+      var arr=cache.daily[link.ds]||[];
+      var idx=arr.indexOf(link.task);
+      if(idx>=0)arr.splice(idx,1);
+      if(typeof renderDailyTasks==='function')renderDailyTasks();
+      if(typeof renderCal==='function')renderCal();
+      if(typeof renderDashboard==='function')renderDashboard();
+      if(link.task.id&&String(link.task.id).indexOf('temp-')!==0)withSync(async function(){await deletePage(link.task.id);});
+    }
+  }
   fp[kind].splice(i,1);fpSave();fpRenderAll();
   if(item&&item._nid){withSync(async function(){await deletePage(item._nid);});}
 }

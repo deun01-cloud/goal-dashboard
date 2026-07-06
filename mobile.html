@@ -102,6 +102,7 @@ body{
 .tag-h{background:var(--purple-light);color:var(--purple-dark);}
 .tag-m{background:var(--meeting-light);color:var(--meeting);}
 .tag-s{background:var(--amber-light);color:var(--amber-dark);}
+.tag-f{background:var(--teal-light);color:var(--teal);}
 .pri{font-size:10px;padding:3px 8px;border-radius:10px;flex-shrink:0;}
 .pri-high{background:var(--red-light);color:var(--red-dark);}
 .pri-mid{background:var(--amber-light);color:var(--amber-dark);}
@@ -820,7 +821,9 @@ function pad(n){return String(n).padStart(2,'0');}
 function fmt(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function todayStr(){return fmt(TODAY);}
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function tagCls(t){return 'tag tag-'+(t==='업무'?'w':t==='개인'?'p':t==='건강'?'h':t==='미팅'?'m':'s');}
+/* 기타 지출 입금 업무 숨김 마커 제거 (화면 표시용) */
+function stripMk(s){return String(s||'').replace(/\s*〖입금:[^〗]*〗/g,'').trim();}
+function tagCls(t){return 'tag tag-'+(t==='업무'?'w':t==='개인'?'p':t==='건강'?'h':t==='미팅'?'m':t==='재무'?'f':'s');}
 function priCls(p){return 'pri pri-'+(p==='높음'?'high':p==='보통'?'mid':'low');}
 function getWeekNum(ds){var d=new Date(ds+'T00:00:00'),f=new Date(d.getFullYear(),d.getMonth(),1);return Math.ceil((d.getDate()+f.getDay())/7);}
 function getYM(ds){var d=new Date(ds+'T00:00:00');return d.getFullYear()+'년 '+(d.getMonth()+1)+'월';}
@@ -1021,7 +1024,7 @@ function renderToday(){
       mh+='<div class="task meeting">'
         +(t.meetingTime?'<span class="mtg-time">'+t.meetingTime+'</span>':'')
         +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
-        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
         +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
     });
   }
@@ -1052,7 +1055,7 @@ function renderToday(){
     document.getElementById('today-tasks').innerHTML=others.map(function(t,i){
       return '<div class="task">'
         +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
-        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
         +'<button class="move-btn" onclick="moveDailyToWeekly(\''+t.id+'\',\''+disp+'\')" title="주간으로 이동">↓주</button>'
         +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
@@ -1180,7 +1183,7 @@ function renderTodayWeeklyTasks(ds){
   document.getElementById('today-weekly').innerHTML=weekly.map(function(t){
     return '<div class="task">'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleWeeklyT(\''+t.id+'\',\''+key+'\')"></div>'
-      +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+      +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<button class="move-btn" onclick="moveWeeklyToDaily(\''+t.id+'\',\''+key+'\')" title="오늘로 이동">↑일</button>'
       +'<button class="del" onclick="delWeeklyT(\''+t.id+'\',\''+key+'\')">×</button></div>';
@@ -1234,6 +1237,7 @@ function toggleDaily(id,ds){
   t.done=!t.done;
   renderToday();
   withSync(function(){return updatePage(id,{'완료':pCheck(t.done)});});
+  if(typeof fpSyncOtherFromTask==='function')fpSyncOtherFromTask(t);
 }
 function delDaily(id,ds){
   if(!confirm('이 업무를 삭제할까요?'))return;
@@ -1321,7 +1325,7 @@ function renderMonthlyGoals(){
       listEl.innerHTML=tasks.map(function(t){
         return '<div class="task">'
           +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthlyGoal(\''+t.id+'\')"></div>'
-          +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+          +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
           +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
           +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
           +'<button class="del" onclick="delMonthlyGoal(\''+t.id+'\')">×</button></div>';
@@ -1534,7 +1538,7 @@ function renderMonthlySheet(){
   document.getElementById('monthly-list').innerHTML=tasks.map(function(t){
     return '<div class="task">'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleMonthly(\''+t.id+'\','+selMonthTab+')"></div>'
-      +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(t.text)+'</span>'
+      +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
       +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
       +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span>'
       +'<button class="del" onclick="delMonthly(\''+t.id+'\','+selMonthTab+')">×</button></div>';
@@ -1752,7 +1756,7 @@ async function fpLoadFromNotion(){
     if(key==='annual')item.month=month||1;
     if(key==='debts')item.rate=rate||0;
     if(key==='fgoals'){item.target=amt;item.due=rText(pr,'기한')||'';item.done=rCheck(pr,'완료');delete item.amt;}
-    if(key==='others')item.date=date||'';
+    if(key==='others'){item.date=rDate(pr,'날짜')||'';item.paid=!!rCheck(pr,'완료');}
     next[key].push(item);
   });
   ['income','fixed','annual','assets','debts','fgoals','others'].forEach(function(k){
@@ -1815,6 +1819,7 @@ async function fpCreateNotion(kind,item){
   if(kind==='debts'&&item.rate)props['금리']=pNumber(item.rate);
   if(kind==='fgoals'){props['기한']=pText(item.due||'');props['완료']=pCheck(!!item.done);}
   if(kind==='others'&&item.date)props['날짜']=pDate(item.date);
+  if(kind==='others')props['완료']=pCheck(!!item.paid);
   try{
     return await createPage(DB.fp,props);
   }catch(e){
@@ -2030,10 +2035,24 @@ function fpRenderOthers(){
   var ordered=oth.items.map(function(x){return{x:x,i:fp.others.indexOf(x)};}).sort(function(a,b){return (a.x.date<b.x.date?-1:1);});
   el.innerHTML=ordered.map(function(o){
     var dtag=o.x.date?o.x.date.slice(5).replace('-','/'):'';
-    return fpRow('others',o.i,'<div class="fp-row" ondblclick="fpEdit(\'others\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;"><span class="fp-mtag">'+dtag+'</span><span class="fp-name">'+escHtml(o.x.name)+'</span>'+
-      '<span class="fp-amt">'+won(o.x.amt)+'</span>'+
+    var paid=!!o.x.paid;
+    var cb='<div class="cb'+(paid?' done':'')+'" onclick="event.stopPropagation();fpToggleOtherPaid('+o.i+')" style="width:20px;height:20px;min-width:20px;margin-right:4px;"></div>';
+    var nameStyle=paid?' style="text-decoration:line-through;color:var(--text3);"':'';
+    var paidTag=paid?'<span class="fp-mtag" style="background:var(--teal-light);color:var(--teal);">입금완료</span>':'';
+    return fpRow('others',o.i,'<div class="fp-row" ondblclick="fpEdit(\'others\','+o.i+')" title="더블클릭하여 수정" style="cursor:pointer;">'+cb+'<span class="fp-mtag">'+dtag+'</span><span class="fp-name"'+nameStyle+'>'+escHtml(o.x.name)+'</span>'+paidTag+
+      '<span class="fp-amt"'+(paid?' style="color:var(--text3);"':'')+'>'+won(o.x.amt)+'</span>'+
       '<button class="fp-del" onclick="event.stopPropagation();fpDel(\'others\','+o.i+')">&#10005;</button></div>');
   }).join('')+'<div class="fp-row" style="border-top:1px solid var(--border2);"><span class="fp-name" style="font-weight:600;">'+fpSelMonth+'월 기타 합계</span><span class="fp-amt" style="color:var(--meeting);">'+won(oth.total)+'</span><span style="width:18px;"></span></div>';
+}
+/* 기타 지출 ↔ 입금 업무 연결용 숨김 마커 */
+function fpOtherMarker(item){return '〖입금:'+(item.date||'')+'|'+(item.name||'')+'|'+(item.amt||0)+'〗';}
+function fpOtherTaskText(item){return (item.name||'')+' 입금'+(item.amt?(' ('+won(item.amt)+')'):'')+' '+fpOtherMarker(item);}
+function fpFindOtherTask(item){
+  var ds=item.date;if(!ds)return null;
+  var mk=fpOtherMarker(item);
+  var arr=cache.daily[ds]||[];
+  for(var i=0;i<arr.length;i++){if((arr[i].text||'').indexOf(mk)>=0)return{task:arr[i],ds:ds};}
+  return null;
 }
 function fpAddOther(){
   var dEl=document.getElementById('fp-oth-date');
@@ -2042,13 +2061,47 @@ function fpAddOther(){
   var a=fpNum(document.getElementById('fp-oth-amt').value);
   if(!date){alert('날짜를 선택하세요');return;}
   if(!n||a<=0){alert('항목명과 금액을 입력하세요');return;}
-  var item={name:n,amt:a,date:date};
+  var item={name:n,amt:a,date:date,paid:false};
   if(!fp.others)fp.others=[];
   fp.others.push(item);fpSave();
   var parts=date.split('-');fpSelYear=parseInt(parts[0],10);fpSelMonth=parseInt(parts[1],10);
   document.getElementById('fp-oth-name').value='';document.getElementById('fp-oth-amt').value='';
   fpRenderAll();
   withSync(async function(){item._nid=await fpCreateNotion('others',item);fpSave();});
+  /* 해당 날짜에 "○○ 입금" 일간 업무 자동 생성 (재무 태그) */
+  if(typeof addDailyNew==='function'&&!(cache.daily[date]||[]).some(function(x){return (x.text||'').indexOf(fpOtherMarker(item))>=0;})){
+    withSync(function(){return addDailyNew(fpOtherTaskText(item),date,'재무','보통',false,'');});
+  }
+}
+/* 기타 지출 입금완료 토글 → 연결된 일간 업무도 동기화 */
+function fpToggleOtherPaid(i){
+  var item=fp.others&&fp.others[i];if(!item)return;
+  if(typeof haptic==='function')haptic();
+  item.paid=!item.paid;fpSave();fpRenderOthers();
+  if(item._nid)withSync(function(){return updatePage(item._nid,{'완료':pCheck(!!item.paid)});});
+  var link=fpFindOtherTask(item);
+  if(link&&link.task.done!==item.paid){
+    link.task.done=item.paid;
+    if(typeof renderToday==='function')renderToday();
+    if(typeof renderAll==='function')renderAll();
+    if(String(link.task.id).indexOf('temp-')!==0)withSync(function(){return updatePage(link.task.id,{'완료':pCheck(!!item.paid)});});
+  }
+}
+/* 일간 업무(입금 마커) 완료 토글 → 연결된 기타 지출 paid 동기화 */
+function fpSyncOtherFromTask(task){
+  if(!task||(task.text||'').indexOf('〖입금:')<0)return;
+  if(!fp.others)return;
+  for(var i=0;i<fp.others.length;i++){
+    var it=fp.others[i];
+    if((task.text||'').indexOf(fpOtherMarker(it))>=0){
+      if(it.paid!==task.done){
+        it.paid=task.done;fpSave();
+        if(document.getElementById('fp-others-list'))fpRenderOthers();
+        if(it._nid)withSync(function(){return updatePage(it._nid,{'완료':pCheck(!!it.paid)});});
+      }
+      return;
+    }
+  }
 }
 function fpRenderDebts(){
   var el=document.getElementById('fp-debt-list');if(!el)return;
@@ -2421,6 +2474,17 @@ function fpDelMemo(i){
 function fpToggleMemo(i){var m=fp.memos[i];if(!m)return;m.done=!m.done;fpSave();fpRenderMemos();if(m._nid){withSync(async function(){await updatePage(m._nid,{'완료':pCheck(!!m.done)});});}}
 function fpDel(kind,i){
   var item=fp[kind][i];
+  /* 기타 지출 삭제 시 연결된 입금 일간 업무도 함께 삭제 */
+  if(kind==='others'&&item&&typeof fpFindOtherTask==='function'){
+    var link=fpFindOtherTask(item);
+    if(link){
+      var arr=cache.daily[link.ds]||[];var idx=arr.indexOf(link.task);
+      if(idx>=0)arr.splice(idx,1);
+      if(typeof renderToday==='function')renderToday();
+      if(typeof renderAll==='function')renderAll();
+      if(link.task.id&&String(link.task.id).indexOf('temp-')!==0)withSync(async function(){await deletePage(link.task.id);});
+    }
+  }
   fp[kind].splice(i,1);fpSave();fpRenderAll();
   if(item&&item._nid){withSync(async function(){await deletePage(item._nid);});}
 }
