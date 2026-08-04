@@ -96,6 +96,9 @@ body{
 .cb.done::after{content:'';width:11px;height:6px;border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;transform:rotate(-45deg) translateY(-1px);}
 .task-text{flex:1;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .task-text.struck{text-decoration:line-through;color:var(--text3);}
+.rep-badge{font-size:10px;background:var(--blue-light);color:var(--blue-dark);padding:1px 6px;border-radius:8px;white-space:nowrap;font-weight:600;}
+.task.rep-virtual{opacity:.72;cursor:pointer;background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(55,138,221,.05) 6px,rgba(55,138,221,.05) 12px);}
+.task.rep-virtual .task-text{color:var(--text2);}
 .tag{font-size:10px;padding:3px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0;}
 .tag-w{background:var(--blue-light);color:var(--blue-dark);}
 .tag-p{background:var(--green-light);color:var(--green-dark);}
@@ -708,6 +711,7 @@ body{
       <button class="chip active" data-tag="업무">업무</button>
       <button class="chip" data-tag="개인">개인</button>
       <button class="chip" data-tag="건강">건강</button>
+      <button class="chip" data-tag="재무">재무</button>
       <button class="chip" data-tag="학습">학습</button>
     </div>
   </div>
@@ -718,6 +722,19 @@ body{
       <button class="chip active" data-pri="보통">보통</button>
       <button class="chip" data-pri="낮음">낮음</button>
     </div>
+  </div>
+  <div class="field" id="field-repeat" style="display:none;">
+    <label>반복</label>
+    <select class="input" id="add-repeat">
+      <option value="">반복 없음</option>
+      <optgroup label="매주">
+        <option value="매주월">매주 월</option><option value="매주화">매주 화</option><option value="매주수">매주 수</option><option value="매주목">매주 목</option><option value="매주금">매주 금</option><option value="매주토">매주 토</option><option value="매주일">매주 일</option>
+      </optgroup>
+      <optgroup label="격주">
+        <option value="격주월">격주 월</option><option value="격주화">격주 화</option><option value="격주수">격주 수</option><option value="격주목">격주 목</option><option value="격주금">격주 금</option><option value="격주토">격주 토</option><option value="격주일">격주 일</option>
+      </optgroup>
+      <option value="매월">매월 (같은 날)</option>
+    </select>
   </div>
   <div class="field" id="field-goal-div" style="display:none;">
     <label>구분</label>
@@ -996,6 +1013,43 @@ var todaySelDate = fmt(TODAY);
 var todayCalY = TODAY.getFullYear();
 var todayCalM = TODAY.getMonth();
 
+/* ===== 반복 일정 가상 표시 (PC 버전과 동일 로직) ===== */
+var REPEAT_DOW={'매주월':1,'매주화':2,'매주수':3,'매주목':4,'매주금':5,'매주토':6,'매주일':0,
+                '격주월':1,'격주화':2,'격주수':3,'격주목':4,'격주금':5,'격주토':6,'격주일':0};
+var REPEAT_HORIZON_DAYS=185; /* 오늘 기준 미래 약 6개월까지만 가상 표시 */
+function getRepeatsForDate(ds){
+  if(!ds)return[];
+  var target=new Date(ds+'T00:00:00');
+  var todayD=new Date(todayStr()+'T00:00:00');
+  var horizon=new Date(todayD);horizon.setDate(horizon.getDate()+REPEAT_HORIZON_DAYS);
+  if(target<todayD||target>horizon)return[];
+  var out=[];
+  Object.keys(cache.daily).forEach(function(srcDs){
+    (cache.daily[srcDs]||[]).forEach(function(t){
+      if(!t.repeat||t.repeat==='없음')return;
+      if(srcDs===ds)return;      /* 원본 날짜는 이미 cache에 있음 */
+      if(ds<srcDs)return;        /* 원본보다 이전 날짜엔 표시 안 함 */
+      var src=new Date(srcDs+'T00:00:00');
+      var rep=t.repeat,match=false;
+      if(rep==='매월'){
+        if(target.getDate()===src.getDate())match=true;
+      } else if(REPEAT_DOW.hasOwnProperty(rep)){
+        var wantedDow=REPEAT_DOW[rep];
+        if(target.getDay()!==wantedDow){match=false;}
+        else if(rep.indexOf('매주')===0){match=true;}
+        else if(rep.indexOf('격주')===0){
+          var diffDays=Math.round((target-src)/86400000);
+          if(diffDays>0&&Math.floor(diffDays/7)%2===0)match=true;
+        }
+      }
+      if(match){
+        out.push({id:'rep-'+t.id+'-'+ds,srcId:t.id,srcDate:srcDs,text:t.text,done:false,tag:t.tag,pri:t.pri,isMeeting:t.isMeeting,meetingTime:t.meetingTime,repeat:rep,_isRepeat:true});
+      }
+    });
+  });
+  return out;
+}
+
 function renderToday(){
   var disp = todaySelDate || fmt(TODAY);
   var d = new Date(disp+'T00:00:00');
@@ -1017,15 +1071,26 @@ function renderToday(){
   var meetings=tasks.filter(function(t){return t.isMeeting||t.tag==='미팅';});
   var others=tasks.filter(function(t){return !(t.isMeeting||t.tag==='미팅');});
 
+  // 반복 가상 항목 (다른 날짜의 반복 일정이 오늘에 표시되는 것)
+  var reps=getRepeatsForDate(disp);
+  var repMeetings=reps.filter(function(t){return t.isMeeting||t.tag==='미팅';});
+  var repOthers=reps.filter(function(t){return !(t.isMeeting||t.tag==='미팅');});
+
   var mh='';
-  if(meetings.length>0){
+  if(meetings.length>0||repMeetings.length>0){
     mh='<div class="section-h"><span>미팅</span></div>';
     meetings.forEach(function(t){
       mh+='<div class="task meeting">'
         +(t.meetingTime?'<span class="mtg-time">'+t.meetingTime+'</span>':'')
         +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
-        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
+        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+(t.repeat?' <span class="rep-badge">🔁'+t.repeat+'</span>':'')+'</span>'
         +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
+    });
+    repMeetings.forEach(function(t){
+      mh+='<div class="task meeting rep-virtual" onclick="todayMoSelect(\''+t.srcDate+'\')" title="원본 일자('+t.srcDate+')로 이동">'
+        +(t.meetingTime?'<span class="mtg-time">'+t.meetingTime+'</span>':'')
+        +'<span class="task-text">'+escHtml(stripMk(t.text))+'</span>'
+        +'<span class="rep-badge">🔁'+t.repeat+'</span></div>';
     });
   }
   document.getElementById('today-meetings').innerHTML=mh;
@@ -1046,20 +1111,27 @@ function renderToday(){
     }
   }
 
-  document.getElementById('today-tasks-h').style.display=others.length>0?'flex':'none';
+  document.getElementById('today-tasks-h').style.display=(others.length>0||repOthers.length>0)?'flex':'none';
   document.getElementById('today-tasks-h-label').textContent = isToday ? '오늘 할 일' : (d.getMonth()+1)+'/'+d.getDate()+' 할 일';
 
-  if(others.length===0){
+  if(others.length===0&&repOthers.length===0){
     document.getElementById('today-tasks').innerHTML=meetings.length===0?'<div class="empty">'+(isToday?'오늘 할 일이 없어요<br>+ 버튼으로 추가해보세요':'이 날 할 일이 없어요')+'</div>':'';
   } else {
-    document.getElementById('today-tasks').innerHTML=others.map(function(t,i){
+    var oh=others.map(function(t,i){
       return '<div class="task">'
         +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDaily(\''+t.id+'\',\''+disp+'\')"></div>'
-        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
+        +'<span class="task-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+(t.repeat?' <span class="rep-badge">🔁'+t.repeat+'</span>':'')+'</span>'
         +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
         +'<button class="move-btn" onclick="moveDailyToWeekly(\''+t.id+'\',\''+disp+'\')" title="주간으로 이동">↓주</button>'
         +'<button class="del" onclick="delDaily(\''+t.id+'\',\''+disp+'\')">×</button></div>';
     }).join('');
+    oh+=repOthers.map(function(t){
+      return '<div class="task rep-virtual" onclick="todayMoSelect(\''+t.srcDate+'\')" title="원본 일자('+t.srcDate+')로 이동">'
+        +'<span class="task-text">'+escHtml(stripMk(t.text))+'</span>'
+        +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
+        +'<span class="rep-badge">🔁'+t.repeat+'</span></div>';
+    }).join('');
+    document.getElementById('today-tasks').innerHTML=oh;
   }
 
   // 주간 업무 (선택된 날짜가 속한 주)
@@ -1112,9 +1184,10 @@ function renderTodayMonthGrid(){
     var isSel=ds===todaySelDate;
     var holi=HOLIDAYS[ds];
     var evs=cache.daily[ds]||[];
+    var repEvs=getRepeatsForDate(ds);
     var tripsDay=trips.filter(function(tr){return tr.start<=ds&&ds<=tr.end;});
-    var hasMtg=evs.some(function(t){return t.isMeeting||t.tag==='미팅';});
-    var hasTask=evs.some(function(t){return !(t.isMeeting||t.tag==='미팅');});
+    var hasMtg=evs.some(function(t){return t.isMeeting||t.tag==='미팅';})||repEvs.some(function(t){return t.isMeeting||t.tag==='미팅';});
+    var hasTask=evs.some(function(t){return !(t.isMeeting||t.tag==='미팅');})||repEvs.some(function(t){return !(t.isMeeting||t.tag==='미팅');});
     var hasTrip=tripsDay.some(function(t){return t.type==='trip';});
     var hasVac=tripsDay.some(function(t){return t.type==='vacation';});
     var hasExpense=fpExpensesForDate(ds).length>0;
@@ -1416,6 +1489,9 @@ function setAddType(t){
   document.getElementById('field-tag').style.display=(t==='task')?'block':'none';
   document.getElementById('field-pri').style.display=(t==='task'||t==='meeting')?'block':'none';
   document.getElementById('field-goal-div').style.display=t==='goal'?'block':'none';
+  // 반복: 미팅 또는 일간 업무에서만 (주간/월간 업무는 반복 미지원)
+  document.getElementById('field-repeat').style.display=(t==='meeting'||(t==='task'&&addPeriod==='daily'))?'block':'none';
+  document.getElementById('add-repeat').value='';
   document.getElementById('add-input').placeholder=t==='task'?'할 일 입력...':t==='meeting'?'미팅 제목...':'목표 입력...';
 }
 
@@ -1425,7 +1501,7 @@ document.addEventListener('click',function(e){
   var p=c.parentElement;
   if(p.id==='add-tag-chips'){addTag=c.dataset.tag;}
   else if(p.id==='add-pri-chips'){addPri=c.dataset.pri;}
-  else if(p.id==='add-period-chips'){addPeriod=c.dataset.period;}
+  else if(p.id==='add-period-chips'){addPeriod=c.dataset.period;document.getElementById('field-repeat').style.display=(addType==='task'&&addPeriod==='daily')?'block':'none';if(addPeriod!=='daily')document.getElementById('add-repeat').value='';}
   else if(p.id==='add-div-chips'){addDiv=c.dataset.div;}
   else if(p.id==='trip-type-chips'){tripType=c.dataset.tt;}
   else return;
@@ -1443,11 +1519,13 @@ async function submitAdd(){
     } else if(addType==='meeting'){
       var ds=document.getElementById('add-date').value||todayStr();
       var time=document.getElementById('add-time').value||'';
-      await addDailyNew(v,ds,'미팅','높음',true,time);
+      var rep=document.getElementById('add-repeat').value||'';
+      await addDailyNew(v,ds,'미팅','높음',true,time,rep);
     } else {
       var ds=document.getElementById('add-date').value||todayStr();
       if(addPeriod==='daily'){
-        await addDailyNew(v,ds,addTag,addPri,false,'');
+        var rep=document.getElementById('add-repeat').value||'';
+        await addDailyNew(v,ds,addTag,addPri,false,'',rep);
       } else if(addPeriod==='weekly'){
         await addWeeklyNew(v,ds,addTag,addPri);
       } else {
@@ -1466,10 +1544,12 @@ async function submitAdd(){
   }
 }
 
-async function addDailyNew(text,ds,tag,pri,isMtg,time){
-  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||''};
+async function addDailyNew(text,ds,tag,pri,isMtg,time,repeat){
+  repeat=repeat||'';
+  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',repeat:repeat};
   if(!cache.daily[ds])cache.daily[ds]=[];cache.daily[ds].push(opt);
   var props={'업무':pTitle(text),'태그':pSelect(isMtg?'미팅':tag),'우선순위':pSelect(pri),'완료':pCheck(false)};
+  if(repeat)props['반복']=pSelect(repeat);
   if(isMtg&&time){
     var dtStart=ds+'T'+time+':00';
     var dtEndDate=new Date(dtStart);dtEndDate.setHours(dtEndDate.getHours()+1);
