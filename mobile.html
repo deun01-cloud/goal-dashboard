@@ -885,7 +885,18 @@ async function queryDB(dbId){
   return all;
 }
 async function createPage(dbId,props){var data=await nFetch('/pages','POST',{parent:{database_id:dbId.replace(/-/g,'')},properties:props});return data.id;}
-async function updatePage(pageId,props){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{properties:props});}
+/* 로컬 체크 보호: 노션 DB 조회는 PATCH 직후 몇 초간 이전 값을 돌려줄 수 있음.
+   최근 토글한 '완료' 값은 일정 시간 동안 조회 결과보다 우선 적용해 되돌아가는 현상 방지. */
+var _localDone={},LOCAL_DONE_MS=30000;
+function applyLocalDone(){
+  var now=Date.now(),lists=[];
+  Object.keys(_localDone).forEach(function(id){if(now-_localDone[id].t>LOCAL_DONE_MS)delete _localDone[id];});
+  if(!Object.keys(_localDone).length)return;
+  ['daily','weekly','monthly'].forEach(function(k){var o=cache[k]||{};Object.keys(o).forEach(function(x){lists.push(o[x]);});});
+  lists.push(cache.goals||[]);
+  lists.forEach(function(arr){(arr||[]).forEach(function(it){var l=_localDone[it.id];if(l)it.done=l.v;});});
+}
+async function updatePage(pageId,props){if(props&&props['완료']&&'checkbox' in props['완료'])_localDone[pageId]={v:!!props['완료'].checkbox,t:Date.now()};await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{properties:props});if(_localDone[pageId])_localDone[pageId].t=Date.now();}
 async function deletePage(pageId){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{archived:true});}
 
 function pTitle(v){return{title:[{text:{content:v}}]};}
@@ -952,6 +963,7 @@ async function loadAll(){
       cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
     cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
+    applyLocalDone();
     setSync('ok');
     renderAll();
     checkCarryOver();
