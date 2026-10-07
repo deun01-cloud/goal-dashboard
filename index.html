@@ -1330,7 +1330,7 @@ function fpExpensesForDate(ds){
   /* 연간 주요 지출: 월만 있으므로 1일에 표시 */
   if(d===1){
     (fp.annual||[]).forEach(function(x){
-      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt, kind:'annual'});
+      if((x.month||1)===m && x.amt)out.push({name:x.name, amt:x.amt, kind:'annual', i:fp.annual.indexOf(x)});
     });
   }
   /* 월 고정비: 매월 납부일(payday)에 표시. 그 달에 해당 일이 없으면 말일에 표시 */
@@ -1338,11 +1338,11 @@ function fpExpensesForDate(ds){
   (fp.fixed||[]).forEach(function(x){
     if(!x.payday||!x.amt)return;
     var pd=x.payday>lastDay?lastDay:x.payday;
-    if(pd===d)out.push({name:x.name, amt:x.amt, kind:'fixed'});
+    if(pd===d)out.push({name:x.name, amt:x.amt, kind:'fixed', i:fp.fixed.indexOf(x)});
   });
   /* 기타 일회성 지출: 정확한 날짜 매칭 */
   (fp.others||[]).forEach(function(x){
-    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt, kind:'other'});
+    if(x.date===ds && x.amt)out.push({name:x.name, amt:x.amt, kind:'other', i:fp.others.indexOf(x)});
   });
   return out;
 }
@@ -1373,7 +1373,7 @@ function renderCal(){
     tripsDay.forEach(function(tr){inner+='<span class="trip-bar '+tr.type+'">'+escHtml(tr.name)+'</span>';});
     /* 셀당 최대 5개 표시 (지출 → 미팅 → 일반 순) */
     var shown=0, MAXSHOW=5;
-    fpExp.forEach(function(x){if(shown<MAXSHOW){var icon=x.kind==='fixed'?'🔁':'💰';inner+='<span class="dev dev-expense" title="'+escHtml(x.name)+' '+won(x.amt)+(x.kind==='fixed'?' (고정비)':'')+'">'+icon+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
+    fpExp.forEach(function(x){if(shown<MAXSHOW){var icon=x.kind==='fixed'?'🔁':'💰';inner+='<span class="dev dev-expense" style="cursor:pointer;" onclick="event.stopPropagation();calExpClick(\''+(x.kind==='other'?'others':x.kind)+'\','+x.i+')" title="'+escHtml(x.name)+' '+won(x.amt)+(x.kind==='fixed'?' (고정비)':'')+' · 클릭하여 수정">'+icon+escHtml(x.name)+' '+wonShort(x.amt)+'</span>';shown++;}});
     meetings.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev dev-meeting">'+(t._isRepeat?'🔁 ':'')+(t.meetingTime?t.meetingTime+' ':'')+escHtml(stripMk(t.text))+'</span>';shown++;}});
     normals.forEach(function(t){if(shown<MAXSHOW){inner+='<span class="dev '+devCls(t.tag)+'">'+(t._isRepeat?'🔁 ':(t.done?'✓ ':''))+escHtml(stripMk(t.text))+'</span>';shown++;}});
     var totalItems=fpExp.length+meetings.length+normals.length;
@@ -1412,6 +1412,16 @@ function calClick(ds){
   goTab('tasks',document.querySelectorAll('.tab')[2]);
   document.getElementById('daily-date-picker').value=ds;
   renderDailyTasks();
+}
+/* 캘린더 지출 항목 클릭 → FP 현금흐름 탭의 해당 항목을 편집 모드로 */
+function calExpClick(kind,i){
+  var item=fp[kind]&&fp[kind][i];if(!item)return;
+  var find=function(sel,id){return Array.prototype.slice.call(document.querySelectorAll(sel)).find(function(b){return (b.getAttribute('onclick')||'').indexOf("'"+id+"'")>=0;});};
+  goTab('fp',find('.tab','fp'));
+  fpSub('cashflow',find('.fp-subtab','cashflow'));
+  if(kind==='others'&&item.date){var p=item.date.split('-');fpSelYear=parseInt(p[0],10);fpSelMonth=parseInt(p[1],10);}
+  fpEdit(kind,i);
+  setTimeout(function(){var e=document.getElementById('fp-edit-name');if(e)e.scrollIntoView({block:'center'});},0);
 }
 function calMove(d){calM+=d;if(calM>11){calM=0;calY++;}if(calM<0){calM=11;calY--;}renderCal();}
 
