@@ -183,6 +183,7 @@
   .cal-title{font-size:16px;font-weight:600;}
   .cal-nav-btn{width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:transparent;cursor:pointer;font-size:16px;color:var(--text2);display:flex;align-items:center;justify-content:center;font-family:inherit;}
   .cal-nav-btn:hover{background:var(--bg2);}
+  .dash-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;margin-bottom:18px;}
   .cal-wrap{display:flex;gap:10px;align-items:stretch;}
   .cal-main{flex:1;min-width:0;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
@@ -199,16 +200,7 @@
   .dcell.today .dn{color:var(--purple-dark);font-weight:700;}
   .dcell.holiday-cell{background:#FFF8F0;}
   .dcell.holiday-cell .dn{color:#FF6B35;}
-  .cal-week-panel{width:170px;flex-shrink:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);padding:8px;display:flex;flex-direction:column;}
-  .cal-week-panel .cwp-title{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:2px;}
-  .cal-week-panel .cwp-hint{font-size:9px;color:var(--text3);margin-bottom:8px;line-height:1.3;}
-  .cwp-task{display:flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 7px;margin-bottom:5px;cursor:grab;font-size:11px;}
-  .cwp-task:active{cursor:grabbing;}
-  .cwp-task.dragging{opacity:.45;}
-  .cwp-task .cwp-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .cwp-task.done .cwp-txt{text-decoration:line-through;color:var(--text3);}
-  .cwp-empty{font-size:11px;color:var(--text3);padding:6px 2px;}
-  @media(max-width:760px){.cal-wrap{flex-direction:column;}.cal-week-panel{width:auto;}}
+  @media(max-width:760px){.dash-top{grid-template-columns:1fr;}}
   .holiday-lbl{font-size:8px;color:#FF6B35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:1px;}
   .trip-bar{font-size:8px;padding:1px 3px;border-radius:2px;margin-bottom:1px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;}
   .trip-bar.trip{background:var(--trip-color);}
@@ -276,28 +268,9 @@
 
   <!-- DASHBOARD -->
   <div id="dash" class="page active">
-    <div class="cal-header">
-      <span class="cal-title" id="cal-title"></span>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <button class="ics-btn" onclick="exportICS()">📅 캘린더 내보내기</button>
-        <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
-        <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
-      </div>
-    </div>
-    <div class="cal-wrap">
-      <div class="cal-main"><div class="cal-grid" id="main-cal"></div></div>
-      <div class="cal-week-panel" id="cal-week-panel"></div>
-    </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text2);">
-      <span style="color:#FF6B35;">● 공휴일</span>
-      <span style="color:var(--meeting);">● 미팅</span>
-      <span style="color:var(--trip-color);">● 출장</span>
-      <span style="color:var(--vacation-color);">● 휴가</span>
-      <span style="color:#BA7517;">● 지출</span>
-    </div>
-
-    <!-- 캘린더 바로 아래 오늘 할 일 (모바일 최적화) -->
-    <div id="dash-today-mobile" style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color .2s;"
+    <!-- 상단: 오늘 할 일 | 이번 주 업무 -->
+    <div class="dash-top">
+    <div id="dash-today-mobile" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color .2s;"
       ondragover="event.preventDefault();this.style.borderColor='var(--purple)'"
       ondragleave="this.style.borderColor='var(--border)'"
       ondrop="dropWeekToDaily(event);this.style.borderColor='var(--border)'">
@@ -322,12 +295,11 @@
         <button onclick="addTodayMobile()" style="background:var(--purple);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">+ 추가</button>
       </div>
     </div>
-    <!-- 이번 주 업무 (오늘 할 일 바로 아래) -->
-    <div class="card" style="margin-top:14px;"
+    <div class="card" style="margin-bottom:0;"
       ondragover="event.preventDefault();event.currentTarget.classList.add('drag-over-card')"
       ondragleave="event.currentTarget.classList.remove('drag-over-card')"
       ondrop="dropWeekToDaily(event)">
-      <div class="card-title">이번 주 업무 <span style="font-size:10px;color:var(--text3);font-weight:400;">← 오늘 할 일로 드래그 가능</span></div>
+      <div class="card-title">이번 주 업무 <span style="font-size:10px;color:var(--text3);font-weight:400;">← 오늘 할 일·캘린더 날짜로 드래그</span></div>
       <div id="dash-week"></div>
       <div id="ds-week-prog-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
@@ -348,6 +320,26 @@
         <button onclick="addWeeklyFromDash()" style="background:var(--teal);color:#fff;border:none;border-radius:var(--radius-sm);padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">+ 추가</button>
       </div>
     </div>
+    </div>
+    <div class="cal-header">
+      <span class="cal-title" id="cal-title"></span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="ics-btn" onclick="exportICS()">📅 캘린더 내보내기</button>
+        <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
+        <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
+      </div>
+    </div>
+    <div class="cal-wrap">
+      <div class="cal-main"><div class="cal-grid" id="main-cal"></div></div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text2);">
+      <span style="color:#FF6B35;">● 공휴일</span>
+      <span style="color:var(--meeting);">● 미팅</span>
+      <span style="color:var(--trip-color);">● 출장</span>
+      <span style="color:var(--vacation-color);">● 휴가</span>
+      <span style="color:#BA7517;">● 지출</span>
+    </div>
+
     <div class="stats-row" style="margin-top:14px;">
       <div class="stat"><div class="stat-frac teal" id="ds-year-frac"><span class="done-n">-</span><span class="sep">/</span><span class="total-n">-</span></div><div class="stat-label">연간 목표</div></div>
       <div class="stat"><div class="stat-frac blue" id="ds-q-frac"><span class="done-n">-</span><span class="sep">/</span><span class="total-n">-</span></div><div class="stat-label">분기 목표</div></div>
@@ -1391,38 +1383,10 @@ function renderCal(){
   });
   document.getElementById('main-cal').innerHTML=h;
   document.getElementById('cal-title').textContent=calY+'년 '+(calM+1)+'월';
-  renderCalWeekPanel();
 }
 
-/* 캘린더 오른쪽 주간 업무 패널 — 드래그해서 날짜 칸에 떨어뜨리면 그 날짜에 일간 업무 생성 */
-function renderCalWeekPanel(){
-  var el=document.getElementById('cal-week-panel');if(!el)return;
-  var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
-  var wT=(cache.weekly[wKey]||[]).slice().sort(priSort);
-  var html='<div class="cwp-title">이번 주 업무</div><div class="cwp-hint">날짜 칸으로 드래그하면<br>그 날짜에 업무가 생겨요</div>';
-  if(wT.length===0){
-    html+='<div class="cwp-empty">이번 주 업무가 없어요</div>';
-  } else {
-    html+=wT.map(function(t,i){
-      return '<div class="cwp-task'+(t.done?' done':'')+'" draggable="true" '
-        +'ondragstart="calWeekDragStart(event,'+i+')" ondragend="calWeekDragEnd(this)" title="'+escHtml(stripMk(t.text))+'">'
-        +'<span style="color:var(--text3);font-size:10px;flex-shrink:0;">⠿</span>'
-        +'<span class="cwp-txt">'+escHtml(stripMk(t.text))+'</span>'
-        +'<span class="'+priCls(t.pri)+'" style="flex-shrink:0;">'+t.pri+'</span></div>';
-    }).join('');
-  }
-  el.innerHTML=html;
-}
-
-/* 주간 패널 → 캘린더 날짜 칸 드래그 */
+/* 상단 주간 업무 → 캘린더 날짜 칸 드래그 */
 var _calWeekDragIdx=null;
-function calWeekDragStart(e,i){
-  _calWeekDragIdx=i;
-  e.dataTransfer.effectAllowed='copy';
-  try{e.dataTransfer.setData('text/plain',String(i));}catch(_){}
-  if(e.target&&e.target.classList)e.target.classList.add('dragging');
-}
-function calWeekDragEnd(node){if(node&&node.classList)node.classList.remove('dragging');}
 function calCellDragOver(e,node){e.preventDefault();if(_calWeekDragIdx!==null){e.dataTransfer.dropEffect='copy';node.classList.add('drop-target');}}
 function calCellDragLeave(node){node.classList.remove('drop-target');}
 async function calCellDrop(e,node,ds){
@@ -1532,7 +1496,7 @@ function renderDashboard(){
   var wHtml='<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;color:var(--text2);">'+escHtml(wKey)+'</span><span style="font-size:12px;color:var(--text2);">'+wDone+'/'+wTotal+' 완료</span></div>';
   wHtml+=wTotal===0?'<div style="color:var(--text3);font-size:13px;">아래에서 추가하세요</div>'
     :wT.map(function(t,i){
-      return'<div class="item-row" draggable="true" ondragstart="dashWeekDragStart(event,'+i+')" style="cursor:grab;">'
+      return'<div class="item-row" draggable="true" ondragstart="dashWeekDragStart(event,'+i+')" ondragend="_calWeekDragIdx=null;_dashWeekDragIdx=null;" style="cursor:grab;">'
         +'<span style="color:var(--text3);font-size:12px;padding:0 4px;flex-shrink:0;">⠿</span>'
         +'<div class="cb'+(t.done?' done':'')+'" onclick="dashToggleWeekly('+i+')"></div>'
         +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
@@ -1559,7 +1523,6 @@ function renderDashboard(){
   var mEl=document.getElementById('dash-month');
   if(mEl)mEl.innerHTML=mHtml;
   renderExpenseReminders();
-  if(typeof renderCalWeekPanel==='function')renderCalWeekPanel();
 }
 
 /* 대시보드: 다가오는 주요 지출/기타 지출 리마인드 (앞으로 3개월) */
@@ -1633,7 +1596,8 @@ function mobileTodayToggle(i){var s=(cache.daily[todayStr()]||[]).slice().sort(p
 /* 주간→오늘 드래그 */
 var _dashWeekDragIdx=null;
 function dashWeekDragStart(e,i){
-  _dashWeekDragIdx=i;
+  _dashWeekDragIdx=i;_calWeekDragIdx=i;
+  try{e.dataTransfer.setData('text/plain',String(i));}catch(_){}
   e.dataTransfer.effectAllowed='copy';
 }
 async function dropWeekToDaily(e){
