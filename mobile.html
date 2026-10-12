@@ -948,7 +948,7 @@ async function loadAll(){
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||''});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||'',ord:(pr['순서']&&typeof pr['순서'].number==='number')?pr['순서'].number:null});
     });
     cache.weekly={};
     wR.forEach(function(p){
@@ -1074,7 +1074,11 @@ function renderToday(){
   renderTodayMonthGrid();
 
   // 일간 업무 (선택된 날짜 기준)
-  var tasks=(cache.daily[disp]||[]).slice().sort(priSort);
+  /* PC에서 드래그로 정한 순서(노션 '순서') 우선, 없으면 우선순위 정렬 */
+  var _all=(cache.daily[disp]||[]).slice();
+  var _wo=_all.filter(function(t){return t.ord!=null;}).sort(function(a,b){return a.ord-b.ord;});
+  var _no=_all.filter(function(t){return t.ord==null;});
+  var tasks=_wo.length?_wo.concat(_no):_no.sort(priSort);
   var done=tasks.filter(function(t){return t.done;}).length;
   var pct=tasks.length?Math.round(done/tasks.length*100):0;
   document.getElementById('today-frac').innerHTML='<span>'+done+'</span><span class="sep">/</span><span class="total">'+tasks.length+'</span>';

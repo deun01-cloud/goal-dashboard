@@ -271,7 +271,7 @@
     <!-- 상단: 오늘 할 일 | 이번 주 업무 -->
     <div class="dash-top">
     <div id="dash-today-mobile" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color .2s;"
-      ondragover="event.preventDefault();this.style.borderColor='var(--purple)'"
+      ondragover="event.preventDefault();if(_dashTodayDragIdx===null)this.style.borderColor='var(--purple)'"
       ondragleave="this.style.borderColor='var(--border)'"
       ondrop="dropWeekToDaily(event);this.style.borderColor='var(--border)'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -959,7 +959,7 @@ async function loadAll(){
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||''});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||'',ord:(pr['순서']&&typeof pr['순서'].number==='number')?pr['순서'].number:null});
     });
     if(skipCount>0)diag('⚠ 일간 '+skipCount+'개가 날짜 없음으로 건너뜀','#f80');
     /* 오늘 날짜 일간 업무 갯수 보고 */
@@ -1453,7 +1453,7 @@ function renderDashboard(){
   if(doneEl)doneEl.textContent='완료 '+mDone+'개';
   if(leftEl)leftEl.textContent='남은 '+(mTotal-mDone)+'개';
 
-  var tdSorted=td.slice().sort(priSort);
+  var tdSorted=getDailyOrdered(todayStr());
   var tdDone=td.filter(function(t){return t.done;}).length;
   var tdTotal=td.length;
   var tdPct=tdTotal===0?0:Math.round(tdDone/tdTotal*100);
@@ -1488,7 +1488,8 @@ function renderDashboard(){
     } else {
       mobileList.innerHTML=tdSorted.map(function(t,i){
         var isMtg=t.isMeeting||t.tag==='미팅';
-        return'<div class="item-row'+(isMtg?' meeting-row':'')+'">'
+        return'<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="dashTodayDragStart(event,'+i+')" ondragend="_dashTodayDragIdx=null" ondragover="dashTodayDragOver(event)" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="dashTodayDrop(event,'+i+')" style="cursor:grab;">'
+          +'<span style="color:var(--text3);font-size:12px;padding:0 4px;flex-shrink:0;">⠿</span>'
           +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
           +'<div class="cb'+(t.done?' done':'')+'" onclick="mobileTodayToggle('+i+')"></div>'
           +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
@@ -1601,7 +1602,26 @@ function renderExpenseReminders(){
   card.style.display='block';
 }
 function dashToggleDaily(i){var s=td_sorted();var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
-function mobileTodayToggle(i){var s=(cache.daily[todayStr()]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleDaily(t.id,todayStr());}
+function mobileTodayToggle(i){var t=getDailyOrdered(todayStr())[i];if(t)doToggleDaily(t.id,todayStr());}
+/* 대시보드 오늘 할 일 순서 드래그 */
+var _dashTodayDragIdx=null;
+function dashTodayDragStart(e,i){
+  _dashTodayDragIdx=i;
+  try{e.dataTransfer.setData('text/plain','today:'+i);}catch(_){}
+  e.dataTransfer.effectAllowed='move';
+}
+function dashTodayDragOver(e){
+  if(_dashTodayDragIdx===null)return; /* 주간→오늘 드래그는 카드 전체가 처리 */
+  e.preventDefault();e.currentTarget.classList.add('drag-over');
+}
+function dashTodayDrop(e,i){
+  e.currentTarget.classList.remove('drag-over');
+  if(_dashTodayDragIdx===null)return; /* 주간 업무 드롭이면 카드 핸들러로 넘김 */
+  e.preventDefault();e.stopPropagation();
+  var card=document.getElementById('dash-today-mobile');if(card)card.style.borderColor='var(--border)';
+  var from=_dashTodayDragIdx;_dashTodayDragIdx=null;
+  reorderDaily(todayStr(),from,i);
+}
 
 /* 주간→오늘 드래그 */
 var _dashWeekDragIdx=null;
@@ -1653,7 +1673,7 @@ async function addTodayMobile(){
 }
 function dashToggleWeekly(i){var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';var s=(cache.weekly[wKey]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleWeekly(t.id,wKey);}
 function dashToggleMonthly(i){var s=(cache.monthly[TODAY.getMonth()]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleMonthly(t.id,TODAY.getMonth());}
-function td_sorted(){return(cache.daily[todayStr()]||[]).slice().sort(priSort);}
+function td_sorted(){return getDailyOrdered(todayStr());}
 
 /* ============================================================
    GOALS
@@ -1704,25 +1724,29 @@ function toggleGoal(idx){var g=cache.goals[idx];if(!g)return;g.done=!g.done;rend
 function updProg(idx,v){var g=cache.goals[idx];if(!g)return;g.prog=parseInt(v);renderGoals();withSync(function(){return updatePage(g.id,{'진행률':pNumber(g.prog)});});}
 function delGoal(idx){var g=cache.goals[idx];if(!g)return;cache.goals.splice(idx,1);renderGoals();withSync(function(){return deletePage(g.id);});}
 
-/* 수동 순서 유지용 배열 (드래그 후 순서 고정) */
-var _dailyOrder = {}; /* key: dateStr → [id, id, ...] */
-
+/* 일간 업무 순서: 노션 '순서'(number) 기준으로 고정. 순서 없는 항목(새로 추가)은 맨 뒤에 붙음 */
 function getDailyOrdered(ds){
-  var tasks = cache.daily[ds] || [];
-  var order = _dailyOrder[ds];
-  if(!order || order.length !== tasks.length){
-    /* 순서 없으면 기본 priSort */
-    var sorted = tasks.slice().sort(priSort);
-    _dailyOrder[ds] = sorted.map(function(t){return t.id;});
-    return sorted;
-  }
-  /* 저장된 순서대로 정렬 */
-  var idMap = {};
-  tasks.forEach(function(t){idMap[t.id]=t;});
-  var ordered = order.map(function(id){return idMap[id];}).filter(Boolean);
-  /* 순서에 없는 새 항목은 뒤에 붙임 */
-  tasks.forEach(function(t){if(ordered.indexOf(t)<0)ordered.push(t);});
-  return ordered;
+  var tasks=(cache.daily[ds]||[]).slice();
+  var withOrd=tasks.filter(function(t){return t.ord!=null;}).sort(function(a,b){return a.ord-b.ord;});
+  var noOrd=tasks.filter(function(t){return t.ord==null;});
+  if(withOrd.length===0)return noOrd.sort(priSort);
+  return withOrd.concat(noOrd);
+}
+/* from→to 위치로 옮기고 순서를 노션에 저장 */
+function reorderDaily(ds,from,to){
+  if(from===null||from===to)return;
+  var arr=getDailyOrdered(ds);
+  var m=arr.splice(from,1)[0];if(!m)return;
+  arr.splice(to,0,m);
+  var changed=[];
+  arr.forEach(function(t,i){if(t.ord!==i){t.ord=i;changed.push(t);}});
+  renderDailyTasks();renderDashboard();
+  withSync(async function(){
+    for(var k=0;k<changed.length;k++){
+      var t=changed[k];if(String(t.id).indexOf('temp-')===0)continue;
+      await updatePage(t.id,{'순서':pNumber(t.ord)});
+    }
+  });
 }
 function renderDailyTasks(){
   var dp=document.getElementById('daily-date-picker');if(dp&&dp.value)selDailyDate=dp.value;
@@ -1778,15 +1802,8 @@ function jumpToRepeatSrc(ds){
 }
 function _dropDaily(e,i){
   e.preventDefault();e.currentTarget.classList.remove('drag-over');
-  if(_dDrag===null||_dDrag===i)return;
-  var arr=getDailyOrdered(selDailyDate);
-  var m=arr.splice(_dDrag,1)[0];
-  arr.splice(i,0,m);
-  /* 수동 순서 저장 */
-  _dailyOrder[selDailyDate]=arr.map(function(t){return t.id;});
-  cache.daily[selDailyDate]=arr;
-  _dDrag=null;
-  renderDailyTasks();
+  var from=_dDrag;_dDrag=null;
+  reorderDaily(selDailyDate,from,i);
 }
 function cycleDailyPri(i){
   var tasks=getDailyOrdered(selDailyDate);var t=tasks[i];if(!t)return;
@@ -1798,7 +1815,6 @@ function toggleDailyByIdx(i){var t=getDailyOrdered(selDailyDate)[i];if(t)doToggl
 function delDailyByIdx(i){
   var t=getDailyOrdered(selDailyDate)[i];if(!t)return;
   cache.daily[selDailyDate]=(cache.daily[selDailyDate]||[]).filter(function(x){return x.id!==t.id;});
-  if(_dailyOrder[selDailyDate])_dailyOrder[selDailyDate]=_dailyOrder[selDailyDate].filter(function(id){return id!==t.id;});
   renderDailyTasks();renderCal();renderDashboard();
   withSync(function(){return deletePage(t.id);});
 }
