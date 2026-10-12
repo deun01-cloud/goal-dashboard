@@ -167,6 +167,10 @@ body{
 .dd-count{color:var(--text2);font-size:11px;font-weight:400;}
 
 /* Goals */
+.proj-bar{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-bottom:4px;-webkit-overflow-scrolling:touch;}
+.proj-chip{flex-shrink:0;padding:6px 12px;border-radius:16px;border:1px solid var(--border);background:var(--bg);font-size:13px;color:var(--text2);white-space:nowrap;}
+.proj-chip.on{background:var(--text);color:var(--bg);border-color:var(--text);}
+.proj-add{border-style:dashed;}
 .goal-card{padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;}
 .goal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;}
 .goal-h-l{display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
@@ -433,7 +437,8 @@ body{
         <div id="monthly-goals-list"></div>
       </div>
 
-      <!-- 2. 분기/연간 목표 -->
+      <!-- 2. 분기/연간 목표 (프로젝트별) -->
+      <div id="proj-bar" class="proj-bar"></div>
       <div id="goals-list"></div>
     </div>
 
@@ -962,7 +967,7 @@ async function loadAll(){
       if(!cache.monthly[idx])cache.monthly[idx]=[];
       cache.monthly[idx].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',note:rText(pr,'노트')||''});
     });
-    cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무'};});
+    cache.goals=gR.map(function(p){var pr=p.properties;return{id:p.id,text:rTitle(pr,'목표'),done:rCheck(pr,'완료'),prog:rNumber(pr,'진행률'),div:rSelect(pr,'구분')||'연간',cat:rSelect(pr,'카테고리')||'업무',proj:rSelect(pr,'프로젝트')||'공통'};});
     applyLocalDone();
     setSync('ok');
     renderAll();
@@ -1343,8 +1348,9 @@ function delDaily(id,ds){
 function renderGoals(){
   document.getElementById('year-label').textContent=TODAY.getFullYear()+'년';
 
+  renderProjBar();
   var groups={'연간':[],'Q1':[],'Q2':[],'Q3':[],'Q4':[]};
-  cache.goals.forEach(function(g){if(groups[g.div])groups[g.div].push(g);});
+  cache.goals.forEach(function(g){if((g.proj||'공통')===curProj&&groups[g.div])groups[g.div].push(g);});
   var html='';
 
   /* 분기 목표 (현재 분기 먼저) */
@@ -1358,7 +1364,7 @@ function renderGoals(){
     list.forEach(function(g){
       html+='<div class="task">'
         +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal(\''+g.id+'\')"></div>'
-        +'<span class="task-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'<span class="task-text'+(g.done?' struck':'')+'" onclick="editGoal(\''+g.id+'\')">'+escHtml(g.text)+'</span>'
         +'<span style="font-size:11px;color:var(--text2);flex-shrink:0;">'+g.prog+'%</span>'
         +'<button class="del" onclick="delGoal(\''+g.id+'\')">×</button></div>';
     });
@@ -1377,7 +1383,7 @@ function renderGoals(){
     yrList.forEach(function(g){
       html+='<div class="task">'
         +'<div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal(\''+g.id+'\')"></div>'
-        +'<span class="task-text'+(g.done?' struck':'')+'">'+escHtml(g.text)+'</span>'
+        +'<span class="task-text'+(g.done?' struck':'')+'" onclick="editGoal(\''+g.id+'\')">'+escHtml(g.text)+'</span>'
         +'<span style="font-size:11px;color:var(--text2);flex-shrink:0;">'+g.prog+'%</span>'
         +'<button class="del" onclick="delGoal(\''+g.id+'\')">×</button></div>';
     });
@@ -1387,7 +1393,7 @@ function renderGoals(){
       +'<div class="bar"><div class="bar-fill" id="year-bar" style="width:'+yrAvg+'%"></div></div></div>';
   }
 
-  if(html===''){html='<div class="empty">목표를 추가해보세요<br>+ 버튼 → 목표 탭</div>';}
+  if(html===''){html='<div class="empty">'+escHtml(curProj)+' 프로젝트에 목표를 추가해보세요<br>+ 버튼 → 목표 탭</div>';}
   document.getElementById('goals-list').innerHTML=html;
 
   /* 월간 업무 렌더 */
@@ -1436,6 +1442,59 @@ function delMonthlyGoal(id){
   withSync(function(){return deletePage(id);});
 }
 
+/* 프로젝트: 노션 '프로젝트'(select). 목표 없는 새 프로젝트는 첫 목표 추가 전까지 이 기기에만 보관 */
+var PROJ_KEY='goalProjects',PROJ_CUR_KEY='goalProjCur',_projs=[];
+function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+var curProj=lsGet(PROJ_CUR_KEY,'공통');
+function projList(){
+  var seen=['공통'];
+  cache.goals.forEach(function(g){var p=g.proj||'공통';if(seen.indexOf(p)<0)seen.push(p);});
+  lsGet(PROJ_KEY,[]).forEach(function(n){if(seen.indexOf(n)<0)seen.push(n);});
+  return seen;
+}
+function renderProjBar(){
+  var list=projList();_projs=list;if(list.indexOf(curProj)<0)curProj='공통';
+  var html=list.map(function(n,i){
+    var cnt=cache.goals.filter(function(g){return (g.proj||'공통')===n;}).length;
+    return '<button class="proj-chip'+(n===curProj?' on':'')+'" onclick="projTap('+i+')">'+escHtml(n)+' <span style="opacity:.6;">'+cnt+'</span></button>';
+  }).join('')+'<button class="proj-chip proj-add" onclick="addProj()">+ 프로젝트</button>';
+  document.getElementById('proj-bar').innerHTML=html;
+}
+function selProj(n){curProj=n;lsSet(PROJ_CUR_KEY,n);renderGoals();}
+/* 선택된 칩을 한 번 더 탭하면 이름 변경/삭제 */
+function projTap(i){
+  var n=_projs[i];if(n!==curProj||n==='공통'){selProj(n);return;}
+  var v=prompt('프로젝트 이름 변경 (비우면 삭제)',n);if(v===null)return;v=v.trim();
+  if(!v){delProj(n);return;}
+  if(v!==n)renameProj(n,v);
+}
+function addProj(){
+  var n=(prompt('새 프로젝트 이름')||'').trim();if(!n)return;
+  if(projList().indexOf(n)<0){var l=lsGet(PROJ_KEY,[]);l.push(n);lsSet(PROJ_KEY,l);}
+  selProj(n);
+}
+function renameProj(o,n){
+  lsSet(PROJ_KEY,lsGet(PROJ_KEY,[]).map(function(x){return x===o?n:x;}));
+  var gs=cache.goals.filter(function(g){return g.proj===o;});
+  gs.forEach(function(g){g.proj=n;});
+  selProj(n);
+  withSync(async function(){for(var i=0;i<gs.length;i++)await updatePage(gs[i].id,{'프로젝트':pSelect(n)});});
+}
+function delProj(n){
+  var gs=cache.goals.filter(function(g){return g.proj===n;});
+  if(!confirm('"'+n+'" 프로젝트'+(gs.length?'와 목표 '+gs.length+'개':'')+'를 삭제할까요?'))return;
+  lsSet(PROJ_KEY,lsGet(PROJ_KEY,[]).filter(function(x){return x!==n;}));
+  cache.goals=cache.goals.filter(function(g){return g.proj!==n;});
+  selProj('공통');
+  withSync(async function(){for(var i=0;i<gs.length;i++)await deletePage(gs[i].id);});
+}
+function editGoal(id){
+  var g=cache.goals.find(function(x){return x.id===id;});if(!g)return;
+  var v=prompt('목표 수정',g.text);if(v===null)return;v=v.trim();if(!v||v===g.text)return;
+  g.text=v;renderGoals();
+  withSync(function(){return updatePage(id,{'목표':pTitle(v)});});
+}
 function toggleGoal(id){
   haptic();
   var g=cache.goals.find(function(x){return x.id===id;});if(!g)return;
@@ -1601,11 +1660,13 @@ async function addMonthlyNew(text,monthIdx,tag,pri){
 }
 
 async function addGoalNew(text){
-  var opt={id:'temp-'+Date.now(),text:text,done:false,prog:0,div:addDiv,cat:'업무'};
+  var proj=curProj;
+  var opt={id:'temp-'+Date.now(),text:text,done:false,prog:0,div:addDiv,cat:'업무',proj:proj};
   cache.goals.push(opt);
   setSync('syncing');
-  var id=await createPage(DB.goals,{'목표':pTitle(text),'구분':pSelect(addDiv),'카테고리':pSelect('업무'),'진행률':pNumber(0),'완료':pCheck(false)});
+  var id=await createPage(DB.goals,{'목표':pTitle(text),'구분':pSelect(addDiv),'카테고리':pSelect('업무'),'프로젝트':pSelect(proj),'진행률':pNumber(0),'완료':pCheck(false)});
   opt.id=id;
+  lsSet(PROJ_KEY,lsGet(PROJ_KEY,[]).filter(function(x){return x!==proj;}));
   setSync('ok');
 }
 
