@@ -170,6 +170,12 @@
   .proj-chip .proj-x{font-size:11px;opacity:.6;}
   .proj-chip .proj-x:hover{opacity:1;}
   .proj-add{border-style:dashed;}
+  .goal-grp{margin-bottom:14px;border-radius:8px;transition:background .12s;}
+  .goal-grp.empty{display:none;}
+  body.goal-dragging .goal-grp.empty{display:block;padding:6px;border:1px dashed var(--border);}
+  .goal-grp.drop-on,.proj-chip.drop-on{background:var(--purple-light);}
+  .goal-item[draggable=true]{cursor:grab;}
+  .goal-item.dragging{opacity:.4;}
   .goal-edit{flex:1;font-size:14px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;min-width:0;}
   input[type="range"]{width:65px;cursor:pointer;accent-color:var(--purple);flex-shrink:0;}
   .prog-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
@@ -1701,7 +1707,7 @@ function renderProjBar(){
   var list=projList();_projs=list;if(list.indexOf(curProj)<0)curProj='공통';
   var html=list.map(function(n,i){
     var on=n===curProj,cnt=cache.goals.filter(function(g){return g.proj===n;}).length;
-    return '<span class="proj-chip'+(on?' on':'')+'" onclick="selProj(_projs['+i+'])"'+(n!=='공통'?' ondblclick="renameProj(_projs['+i+'])" title="더블클릭하여 이름 변경"':'')+'>'
+    return '<span class="proj-chip'+(on?' on':'')+'" data-proj-i="'+i+'" ondragover="goalDragOver(event,this)" ondragleave="this.classList.remove(\'drop-on\')" ondrop="goalDrop(event,this)" onclick="selProj(_projs['+i+'])"'+(n!=='공통'?' ondblclick="renameProj(_projs['+i+'])" title="더블클릭하여 이름 변경"':'')+'>'
       +escHtml(n)+' <span style="opacity:.6;">'+cnt+'</span>'
       +(on&&n!=='공통'?'<span class="proj-x" onclick="event.stopPropagation();delProj(_projs['+i+'])">&#10005;</span>':'')+'</span>';
   }).join('');
@@ -1738,19 +1744,19 @@ function renderGoals(){
   var QCLS={'연간':'q-year','Q1':'q1','Q2':'q2','Q3':'q3','Q4':'q4'};
   var html='';
   ['연간','Q1','Q2','Q3','Q4'].forEach(function(div){
-    var list=groups[div];if(list.length===0)return;
-    html+='<div style="margin-bottom:14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span class="q-badge '+QCLS[div]+'">'+div+'</span><span style="font-size:12px;color:var(--text2);">'+list.filter(function(g){return g.done;}).length+'/'+list.length+'</span></div>';
+    var list=groups[div];
+    html+='<div class="goal-grp'+(list.length?'':' empty')+'" data-div="'+div+'" ondragover="goalDragOver(event,this)" ondragleave="this.classList.remove(\'drop-on\')" ondrop="goalDrop(event,this)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span class="q-badge '+QCLS[div]+'">'+div+'</span><span style="font-size:12px;color:var(--text2);">'+list.filter(function(g){return g.done;}).length+'/'+list.length+'</span></div>';
     list.forEach(function(g){
       var idx=cache.goals.indexOf(g);
       var textHtml=editingGoal===idx
         ?'<input class="goal-edit" id="goal-edit-in" value="'+escHtml(g.text).replace(/"/g,'&quot;')+'" onkeydown="if(event.key===\'Enter\')saveGoalEdit('+idx+');if(event.key===\'Escape\'){editingGoal=null;renderGoals();}" onblur="goalEditBlur('+idx+')">'
           +'<select id="goal-edit-div" onchange="setGoalDiv('+idx+',this.value)" onblur="goalEditBlur('+idx+')">'+['연간','Q1','Q2','Q3','Q4'].map(function(d){return '<option'+(d===g.div?' selected':'')+'>'+d+'</option>';}).join('')+'</select>'
         :'<span class="goal-text'+(g.done?' struck':'')+'" ondblclick="editGoal('+idx+')" title="더블클릭하여 수정">'+escHtml(g.text)+'</span>';
-      html+='<div class="goal-item"><div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal('+idx+')"></div>'
+      html+='<div class="goal-item"'+(editingGoal===idx?'':' draggable="true" ondragstart="goalDragStart(event,'+idx+',this)" ondragend="goalDragEnd(this)"')+'><div class="cb'+(g.done?' done':'')+'" onclick="toggleGoal('+idx+')"></div>'
         +textHtml
         +'<div style="width:80px;"><div class="prog-bar"><div class="prog-fill fill-purple" style="width:'+g.prog+'%"></div></div></div>'
         +'<span class="goal-pct">'+g.prog+'%</span>'
-        +'<input type="range" min="0" max="100" value="'+g.prog+'" step="1" oninput="updProg('+idx+',this.value)">'
+        +'<input type="range" min="0" max="100" value="'+g.prog+'" step="1" draggable="true" ondragstart="event.preventDefault();event.stopPropagation()" oninput="updProg('+idx+',this.value)">'
         +'<button class="del-btn" onclick="delGoal('+idx+')">&#10005;</button></div>';
     });
     html+='</div>';
@@ -1770,6 +1776,19 @@ function renderGoals(){
   if(mT.length>0){var mp=Math.round(mT.filter(function(t){return t.done;}).length/mT.length*100);ph+='<div class="prog-row"><span class="prog-label">'+(curM+1)+'월 업무</span><div class="prog-bar-wrap"><div class="prog-bar"><div class="prog-fill fill-teal" style="width:'+mp+'%"></div></div></div><span class="prog-pct">'+mp+'%</span><span style="font-size:11px;color:var(--text2);min-width:50px;text-align:right;">'+mT.filter(function(t){return t.done;}).length+'/'+mT.length+' 완료</span></div>';}
   document.getElementById('goal-prog-summary').innerHTML=ph||'<div style="color:var(--text3);font-size:13px;">목표를 추가하면 진척률이 표시돼요</div>';
   renderDashboard();
+}
+/* 드래그&드롭: 목표를 연간/분기 그룹 또는 프로젝트 칩으로 이동 */
+var dragGoal=null;
+function goalDragStart(e,idx,el){dragGoal=idx;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',String(idx));}catch(_){}el.classList.add('dragging');document.body.classList.add('goal-dragging');}
+function goalDragEnd(el){dragGoal=null;el.classList.remove('dragging');document.body.classList.remove('goal-dragging');document.querySelectorAll('.drop-on').forEach(function(x){x.classList.remove('drop-on');});}
+function goalDragOver(e,el){if(dragGoal===null)return;e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('drop-on');}
+function goalDrop(e,el){
+  e.preventDefault();var g=cache.goals[dragGoal];dragGoal=null;
+  document.body.classList.remove('goal-dragging');
+  if(!g)return;var props={};
+  if(el.dataset.div){if(g.div===el.dataset.div){renderGoals();return;}g.div=el.dataset.div;props['구분']=pSelect(g.div);}
+  else if(el.dataset.projI!==undefined){var n=_projs[+el.dataset.projI];if(!n||g.proj===n){renderGoals();return;}g.proj=n;props['프로젝트']=pSelect(n);lsSet(PROJ_KEY,lsGet(PROJ_KEY,[]).filter(function(x){return x!==n;}));}
+  renderGoals();withSync(function(){return updatePage(g.id,props);});
 }
 function goalEditBlur(idx){setTimeout(function(){var a=document.activeElement;if(a&&(a.id==='goal-edit-in'||a.id==='goal-edit-div'))return;saveGoalEdit(idx);},150);}
 function editGoal(idx){editingGoal=idx;renderGoals();}
