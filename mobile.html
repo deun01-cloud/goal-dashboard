@@ -1083,7 +1083,7 @@ function renderToday(){
   var _all=(cache.daily[disp]||[]).slice();
   var _wo=_all.filter(function(t){return t.ord!=null;}).sort(function(a,b){return a.ord-b.ord;});
   var _no=_all.filter(function(t){return t.ord==null;});
-  var tasks=_wo.length?_wo.concat(_no):_no.sort(priSort);
+  var tasks=_wo.length?_wo.concat(_no):_no.sort(priSort);/* 완료된 업무는 맨 아래로 */tasks=tasks.filter(function(t){return !t.done;}).concat(tasks.filter(function(t){return t.done;}));
   var done=tasks.filter(function(t){return t.done;}).length;
   var pct=tasks.length?Math.round(done/tasks.length*100):0;
   document.getElementById('today-frac').innerHTML='<span>'+done+'</span><span class="sep">/</span><span class="total">'+tasks.length+'</span>';
