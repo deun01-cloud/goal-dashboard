@@ -1825,7 +1825,7 @@ function getDailyOrdered(ds){
   var withOrd=tasks.filter(function(t){return t.ord!=null;}).sort(function(a,b){return a.ord-b.ord;});
   var noOrd=tasks.filter(function(t){return t.ord==null;});
   if(withOrd.length===0)return noOrd.sort(priSort);
-  return withOrd.concat(noOrd);
+  var all=withOrd.concat(noOrd);/* 완료된 업무는 맨 아래로 */return all.filter(function(t){return !t.done;}).concat(all.filter(function(t){return t.done;}));
 }
 /* from→to 위치로 옮기고 순서를 노션에 저장 */
 function reorderDaily(ds,from,to){
