@@ -832,7 +832,7 @@ async function queryDB(dbId,filter){
     if(filter)body.filter=filter;
     if(cursor)body.start_cursor=cursor;
     var data=await nFetch('/databases/'+dbId.replace(/-/g,'')+'/query','POST',body);
-    if(data.results&&data.results.length)all=all.concat(data.results);
+    if(data.results&&data.results.length)all=all.concat(data.results.filter(function(p){return !_isGone(p);}));
     if(!data.has_more)break;
     cursor=data.next_cursor;
     if(!cursor)break;
@@ -851,8 +851,32 @@ function applyLocalDone(){
   lists.push(cache.goals||[]);
   lists.forEach(function(arr){(arr||[]).forEach(function(it){var l=_localDone[it.id];if(l)it.done=l.v;});});
 }
-async function updatePage(pageId,props){if(props&&props['완료']&&'checkbox' in props['완료'])_localDone[pageId]={v:!!props['완료'].checkbox,t:Date.now()};await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{properties:props});if(_localDone[pageId])_localDone[pageId].t=Date.now();}
-async function deletePage(pageId){await nFetch('/pages/'+pageId.replace(/-/g,''),'PATCH',{archived:true});}
+/* 삭제(보관) 보호: 노션 DB 조회는 삭제 직후 몇 초~수십 초간 지운 페이지를 계속 돌려줄 수 있음.
+   그 '유령' 항목을 화면에 다시 올리면 체크·순서변경 시 'archived' 400 에러가 남 → 조회 결과에서 제외. */
+var _localDeleted={},LOCAL_DEL_MS=120000;
+function _nid(id){return String(id||'').replace(/-/g,'');}
+function _isGone(p){
+  if(!p)return true;
+  if(p.archived||p.in_trash)return true;
+  var d=_localDeleted[_nid(p.id)];
+  if(d&&Date.now()-d<LOCAL_DEL_MS)return true;
+  return false;
+}
+async function updatePage(pageId,props){
+  if(props&&props['완료']&&'checkbox' in props['완료'])_localDone[pageId]={v:!!props['완료'].checkbox,t:Date.now()};
+  try{await nFetch('/pages/'+_nid(pageId),'PATCH',{properties:props});}
+  catch(e){
+    /* 다른 기기·노션에서 이미 삭제된 항목 → 에러 대신 화면에서 정리 */
+    if(/archived/i.test(e.message)){_localDeleted[_nid(pageId)]=Date.now();setTimeout(loadAll,0);return;}
+    throw e;
+  }
+  if(_localDone[pageId])_localDone[pageId].t=Date.now();
+}
+async function deletePage(pageId){
+  _localDeleted[_nid(pageId)]=Date.now();
+  try{await nFetch('/pages/'+_nid(pageId),'PATCH',{archived:true});}
+  catch(e){if(/archived/i.test(e.message))return;throw e;}  /* 이미 삭제됨 = 목적 달성 */
+}
 function pTitle(v){return{title:[{text:{content:v}}]};}
 function pCheck(v){return{checkbox:v};}
 function pSelect(v){return{select:{name:v}};}
