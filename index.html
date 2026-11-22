@@ -239,6 +239,11 @@
   .inline-edit{flex:1;border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:3px 8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;min-width:0;}
   .cat-chip{flex:none;font-size:11px;font-weight:700;color:#fff;background:var(--cc);border-radius:4px;padding:1px 7px;margin-right:6px;cursor:pointer;user-select:none;white-space:nowrap;}
   .cat-chip.none{background:none;color:var(--text3);border:1px dashed var(--border2);font-weight:500;}
+  .half-sec{border-radius:8px;padding:2px 0 6px;margin-bottom:6px;min-height:40px;}
+  .half-sec+.half-sec{border-top:1px dashed var(--border2);padding-top:8px;}
+  .half-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text2);padding:4px 2px 2px;}
+  .half-n{font-weight:500;color:var(--text3);}
+  .half-empty{font-size:12px;color:var(--text3);padding:10px 4px;}
   .edit-hint{font-size:10px;color:var(--text3);padding:0 0 6px;text-align:right;}
   /* ===== 노트 사이드 패널 ===== */
   .note-icon{font-size:13px;cursor:pointer;padding:2px 4px;border-radius:4px;flex-shrink:0;opacity:.55;transition:opacity .15s, background .15s;}
@@ -399,8 +404,9 @@
       <button class="btn" style="padding:3px 10px;font-size:12px;" onclick="dismissCarryOver()">닫기</button>
     </div>
     <div class="card">
-      <div id="daily-list" style="min-height:36px" ondragover="_xDragOver(event,'daily')" ondragleave="_xDragLeave(event)" ondrop="_xDrop(event,'daily')"></div>
+      <div id="daily-list"></div>
       <div class="add-row" style="margin-top:10px;">
+        <select id="daily-half" title="오전/오후" style="flex:none;"><option value="오전">오전</option><option value="오후">오후</option></select>
         <select id="daily-cat" title="카테고리" style="flex:none;"><option value="경영">경영</option><option value="OEM">OEM</option><option value="커머스">커머스</option><option value="기타">기타</option></select>
         <input type="text" id="daily-new" placeholder="새 업무 추가..." onkeydown="if(event.key==='Enter')addDailyTask()" style="flex:2;">
         <select id="daily-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="재무">재무</option><option value="학습">학습</option></select>
@@ -1001,7 +1007,7 @@ async function loadAll(){
       if(!cache.daily[ds])cache.daily[ds]=[];
       var isMtg=rSelect(pr,'태그')==='미팅';
       var mtgTime=rDateTime(pr,'날짜')||rText(pr,'메모')||'';
-      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||'',cat:rSelect(pr,'카테고리')||'',ord:(pr['순서']&&typeof pr['순서'].number==='number')?pr['순서'].number:null});
+      cache.daily[ds].push({id:p.id,text:rTitle(pr,'업무'),done:rCheck(pr,'완료'),tag:rSelect(pr,'태그')||'업무',pri:rSelect(pr,'우선순위')||'보통',isMeeting:isMtg,meetingTime:mtgTime,repeat:rSelect(pr,'반복')||'',note:rText(pr,'노트')||'',cat:rSelect(pr,'카테고리')||'',half:rSelect(pr,'시간대')||'',ord:(pr['순서']&&typeof pr['순서'].number==='number')?pr['순서'].number:null});
     });
     if(skipCount>0)diag('⚠ 일간 '+skipCount+'개가 날짜 없음으로 건너뜀','#f80');
     /* 오늘 날짜 일간 업무 갯수 보고 */
@@ -1098,7 +1104,7 @@ async function applyCarryOver(){
   for(var i=0;i<carryPending.length;i++){
     var t=carryPending[i];
     var exists=(cache.daily[selDailyDate]||[]).some(function(x){return x.text===t.text;});
-    if(!exists)await _addDailyRaw(t.text,t.tag,t.pri,false,'',true,'',t.cat);
+    if(!exists)await _addDailyRaw(t.text,t.tag,t.pri,false,'',true,'',t.cat,t.half);
   }
   carryPending=[];renderDailyTasks();renderCal();renderDashboard();
 }
@@ -1873,17 +1879,34 @@ function _orderTasks(list){
     return pos.get(a)-pos.get(b);
   });
 }
-function getDailyOrdered(ds){return _orderTasks(cache.daily[ds]||[]);}
+/* ── 오전/오후 (2026-11-23) ── 노션 '시간대'(select). 비어 있으면 미팅 시각으로, 그것도 없으면 오전 */
+var HALVES=['오전','오후'];
+function halfOf(t){
+  if(t&&(t.half==='오전'||t.half==='오후'))return t.half;
+  var m=String((t&&t.meetingTime)||'').match(/(\d{1,2}):\d{2}/);
+  if(m)return parseInt(m[1],10)<12?'오전':'오후';
+  return '오전';
+}
+function nowHalf(){return new Date().getHours()<12?'오전':'오후';}
+function getDailyOrdered(ds){
+  var all=cache.daily[ds]||[];
+  var am=_orderTasks(all.filter(function(t){return halfOf(t)==='오전';}));
+  var pm=_orderTasks(all.filter(function(t){return halfOf(t)==='오후';}));
+  return am.concat(pm);
+}
 function getWeeklyOrdered(wk){return _orderTasks(cache.weekly[wk]||[]);}
 /* from→to 위치로 옮기고 순서를 노션에 저장. 다른 카테고리 업무 위에 놓으면 그 카테고리로 바뀜 */
-function _reorderList(arr,from,to){
+function _reorderList(arr,from,to,useHalf){
   if(from===null||from===undefined||from===to)return [];
   var target=arr[to],m=arr.splice(from,1)[0];if(!m)return [];
   arr.splice(to,0,m);
   var changed=[];
-  if(target&&target!==m){var tc=catOf(target);if(tc&&catOf(m)!==tc){m.cat=tc;m._catChanged=true;}}
+  /* 다른 오전/오후로 옮기면 시간대만 바꾸고, 같은 시간대 안에서 다른 카테고리 위에 놓으면 그 카테고리로 */
+  if(target&&target!==m){var th=useHalf?halfOf(target):null;
+    if(useHalf&&halfOf(m)!==th){m.half=th;m._halfChanged=true;}
+    else{var tc=catOf(target);if(tc&&catOf(m)!==tc){m.cat=tc;m._catChanged=true;}}}
   arr.forEach(function(t,k){if(t.ord!==k){t.ord=k;changed.push(t);}});
-  if(m._catChanged&&changed.indexOf(m)<0)changed.push(m);
+  if((m._catChanged||m._halfChanged)&&changed.indexOf(m)<0)changed.push(m);
   return changed;
 }
 function _saveOrder(changed){
@@ -1892,12 +1915,13 @@ function _saveOrder(changed){
       var t=changed[k];if(String(t.id).indexOf('temp-')===0)continue;
       var props={'순서':pNumber(t.ord)};
       if(t._catChanged){props['카테고리']=pSelect(t.cat);delete t._catChanged;}
+      if(t._halfChanged){props['시간대']=pSelect(t.half);delete t._halfChanged;}
       await updatePage(t.id,props);
     }
   });
 }
 function reorderDaily(ds,from,to){
-  var changed=_reorderList(getDailyOrdered(ds),from,to);if(!changed.length)return;
+  var changed=_reorderList(getDailyOrdered(ds),from,to,true);if(!changed.length)return;
   renderDailyTasks();renderDashboard();_saveOrder(changed);
 }
 function reorderWeekly(wk,from,to){
@@ -1914,6 +1938,7 @@ function cycleCat(kind,i){
   withSync(function(){return updatePage(t.id,{'카테고리':pSelect(next)});});
 }
 function renderDailyTasks(){
+  var hs=document.getElementById('daily-half');if(hs&&!hs.dataset.init){hs.value=nowHalf();hs.dataset.init='1';}
   var dp=document.getElementById('daily-date-picker');if(dp&&dp.value)selDailyDate=dp.value;
   var d=new Date(selDailyDate+'T00:00:00'),DAYS=['일','월','화','수','목','금','토'];
   var dlabel=document.getElementById('daily-date-label');
@@ -1926,9 +1951,9 @@ function renderDailyTasks(){
   setFrac('dd-done-frac',done,tasks.length);
   var elLeft=document.getElementById('dd-left');if(elLeft)elLeft.innerHTML='<span class="done-n">'+(tasks.length-done)+'</span>';
   var elPct=document.getElementById('dd-pct');if(elPct)elPct.innerHTML='<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
-  var html=(tasks.length===0&&repeats.length===0)?'<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 업무를 추가해보세요</div>':'';
-  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정 · ⠿ 끌어서 일간↔주간 이동</div>';
-  tasks.forEach(function(t,i){
+  var html='';
+  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정 · ⠿ 끌어서 일간↔주간·오전↔오후 이동</div>';
+  var _rowHtml=function(t,i){var html='';
     var isMtg=t.isMeeting||t.tag==='미팅';
     var repBadge=t.repeat?'<span class="repeat-badge" title="이 일정은 반복됩니다">🔁 '+t.repeat+'</span>':'';
     html+='<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="_dDrag='+i+';_wDrag=null" ondragend="_dDrag=null" ondragover="event.preventDefault();event.currentTarget.classList.add(\'drag-over\')" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="_dropDaily(event,'+i+')">'
@@ -1942,6 +1967,14 @@ function renderDailyTasks(){
       +'<span class="'+priCls(t.pri)+'" onclick="cycleDailyPri('+i+')" title="클릭하여 우선순위 변경">'+t.pri+'</span>'
       +'<span class="note-icon'+(t.note?' has-note':'')+'" onclick="openNotePanel(\'daily\','+i+')" title="'+(t.note?'노트 보기/편집':'노트 추가')+'">📝</span>'
       +'<button class="del-btn" onclick="delDailyByIdx('+i+')">&#10005;</button></div>';
+  return html;};
+  HALVES.forEach(function(h){
+    var idx=[];tasks.forEach(function(t,i){if(halfOf(t)===h)idx.push(i);});
+    var hd=idx.filter(function(i){return tasks[i].done;}).length;
+    html+='<div class="half-sec" data-half="'+h+'" ondragover="_halfDragOver(event)" ondragleave="_xDragLeave(event)" ondrop="_halfDrop(event,\''+h+'\')">'
+      +'<div class="half-head"><span class="half-name">'+(h==='오전'?'☀️ 오전':'🌙 오후')+'</span><span class="half-n">'+hd+'/'+idx.length+'</span></div>'
+      +(idx.length?idx.map(function(i){return _rowHtml(tasks[i],i);}).join(''):'<div class="half-empty">여기로 끌어 놓기</div>')
+      +'</div>';
   });
   /* 반복 가상 항목 표시 (체크/삭제/편집 불가, 원본으로 이동만 가능) */
   if(repeats.length){
@@ -2004,9 +2037,9 @@ function fpSyncOtherFromTask(task){
     }
   }
 }
-async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat,cat){
+async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat,cat,half){
   var ds=selDailyDate;
-  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried,repeat:repeat||'',cat:cat||'',ord:null};
+  var opt={id:'temp-'+Date.now(),text:text,done:false,tag:isMtg?'미팅':tag,pri:pri,isMeeting:isMtg,meetingTime:time||'',isCarried:!!isCarried,repeat:repeat||'',cat:cat||'',half:half||'',ord:null};
   if(!cache.daily[ds])cache.daily[ds]=[];
   /* 동일 날짜에 같은 텍스트가 직전에 막 추가됐으면(temp 상태) 중복으로 보고 무시 */
   if(cache.daily[ds].some(function(x){return x.text===text&&String(x.id).indexOf('temp-')===0;}))return;
@@ -2025,6 +2058,7 @@ async function _addDailyRaw(text,tag,pri,isMtg,time,isCarried,repeat,cat){
   if(time)props['메모']=pText(time);
   if(repeat)props['반복']=pSelect(repeat);
   if(cat)props['카테고리']=pSelect(cat);
+  if(half)props['시간대']=pSelect(half);
   /* 노션 동기화 — 실패 시 cache 롤백 + 사용자 알림 (화면에만 추가되고 노션에 안 들어가는 문제 방지) */
   setSync('syncing','저장 중...');
   try{
@@ -2046,9 +2080,10 @@ async function addDailyTask(){
   var tag=document.getElementById('daily-tag').value,pri=document.getElementById('daily-pri').value;
   var rep=document.getElementById('daily-repeat').value||'';
   var cat=document.getElementById('daily-cat').value||'';
+  var half=document.getElementById('daily-half').value||nowHalf();
   document.getElementById('daily-new').value='';
   document.getElementById('daily-repeat').value='';
-  await _addDailyRaw(v,tag,pri,false,'',false,rep,cat);
+  await _addDailyRaw(v,tag,pri,false,'',false,rep,cat,half);
   renderDailyTasks();renderCal();renderDashboard();
 }
 async function addMeetingTask(){
@@ -2057,7 +2092,7 @@ async function addMeetingTask(){
   var rep=document.getElementById('meeting-repeat').value||'';
   document.getElementById('meeting-new').value='';document.getElementById('meeting-time').value='';
   document.getElementById('meeting-repeat').value='';
-  await _addDailyRaw(v,'미팅','높음',true,time,false,rep);
+  await _addDailyRaw(v,'미팅','높음',true,time,false,rep,'',time?(parseInt(time,10)<12?'오전':'오후'):(document.getElementById('daily-half').value||nowHalf()));
   renderDailyTasks();renderCal();renderDashboard();
 }
 
@@ -2102,24 +2137,35 @@ function _xDragOver(e,to){
   e.currentTarget.classList.add('drag-over-card');
 }
 function _xDragLeave(e){if(e.currentTarget.contains(e.relatedTarget))return;e.currentTarget.classList.remove('drag-over-card');}
+function _halfDragOver(e){if(_dDrag===null&&_wDrag===null)return;e.preventDefault();try{e.dataTransfer.dropEffect='move';}catch(_){}e.currentTarget.classList.add('drag-over-card');}
+function _halfDrop(e,h){
+  e.currentTarget.classList.remove('drag-over-card');
+  if(_wDrag!==null){e.preventDefault();e.stopPropagation();var wi=_wDrag;_wDrag=null;moveWeeklyToDaily(wi,h);return;}
+  if(_dDrag===null)return;
+  e.preventDefault();e.stopPropagation();
+  var t=getDailyOrdered(selDailyDate)[_dDrag];_dDrag=null;if(!t||halfOf(t)===h)return;
+  t.half=h;t.ord=null;renderDailyTasks();renderDashboard();
+  if(String(t.id).indexOf('temp-')===0)return;
+  withSync(function(){return updatePage(t.id,{'시간대':pSelect(h)});});
+}
 function _xDrop(e,to){
   e.currentTarget.classList.remove('drag-over-card');
   if(to==='daily'&&_wDrag!==null){e.preventDefault();var i=_wDrag;_wDrag=null;moveWeeklyToDaily(i);}
   else if(to==='weekly'&&_dDrag!==null){e.preventDefault();var j=_dDrag;_dDrag=null;moveDailyToWeekly(j);}
 }
-async function moveWeeklyToDaily(i){
+async function moveWeeklyToDaily(i,half){
   var wk=selWeekKey,t=getWeeklyOrdered(wk)[i];if(!t)return;
   if(String(t.id).indexOf('temp-')===0){setSync('error','저장 중인 업무예요. 잠시 후 다시 옮겨 주세요');return;}
   var ds=selDailyDate;
   if((cache.daily[ds]||[]).some(function(x){return x.text===t.text;})){alert('그 날짜에 같은 업무가 이미 있어요!');return;}
-  var opt={id:'temp-'+Date.now(),text:t.text,done:!!t.done,tag:t.tag||'업무',pri:t.pri||'보통',isMeeting:t.tag==='미팅',meetingTime:'',isCarried:false,repeat:'',note:t.note||'',cat:catOf(t),ord:null};
+  var opt={id:'temp-'+Date.now(),text:t.text,done:!!t.done,tag:t.tag||'업무',pri:t.pri||'보통',isMeeting:t.tag==='미팅',meetingTime:'',isCarried:false,repeat:'',note:t.note||'',cat:catOf(t),half:half||nowHalf(),ord:null};
   cache.weekly[wk]=(cache.weekly[wk]||[]).filter(function(x){return x!==t;});
   if(!cache.daily[ds])cache.daily[ds]=[];cache.daily[ds].push(opt);
   renderDailyTasks();renderWeeklyTasks();renderCal();renderDashboard();
   setSync('syncing','이동 중...');
   try{
     var props={'업무':pTitle(t.text),'태그':pSelect(opt.tag),'우선순위':pSelect(opt.pri),'완료':pCheck(opt.done),'날짜':pDate(ds)};
-    if(opt.note)props['노트']=pText(opt.note);if(opt.cat)props['카테고리']=pSelect(opt.cat);
+    if(opt.note)props['노트']=pText(opt.note);if(opt.cat)props['카테고리']=pSelect(opt.cat);props['시간대']=pSelect(opt.half);
     opt.id=await createPage(DB.daily,props);
     await deletePage(t.id);
     setSync('ok','주간 → '+ds+' 이동 ✓  '+new Date().toLocaleTimeString());
