@@ -397,7 +397,7 @@
       <button class="btn" style="padding:3px 10px;font-size:12px;" onclick="dismissCarryOver()">닫기</button>
     </div>
     <div class="card">
-      <div id="daily-list"></div>
+      <div id="daily-list" style="min-height:36px" ondragover="_xDragOver(event,'daily')" ondragleave="_xDragLeave(event)" ondrop="_xDrop(event,'daily')"></div>
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="daily-new" placeholder="새 업무 추가..." onkeydown="if(event.key==='Enter')addDailyTask()" style="flex:2;">
         <select id="daily-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="재무">재무</option><option value="학습">학습</option></select>
@@ -453,7 +453,7 @@
       <div class="stat"><div class="stat-frac purple" id="wd-pct"><span class="done-n">0%</span></div><div class="stat-label">달성률</div></div>
     </div>
     <div class="card">
-      <div id="weekly-list"></div>
+      <div id="weekly-list" style="min-height:36px" ondragover="_xDragOver(event,'weekly')" ondragleave="_xDragLeave(event)" ondrop="_xDrop(event,'weekly')"></div>
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="weekly-new" placeholder="새 주간 업무 추가..." onkeydown="if(event.key==='Enter')addWeeklyTask()">
         <select id="weekly-tag"><option value="업무">업무</option><option value="개인">개인</option><option value="건강">건강</option><option value="미팅">미팅</option><option value="학습">학습</option></select>
@@ -1881,11 +1881,11 @@ function renderDailyTasks(){
   var elLeft=document.getElementById('dd-left');if(elLeft)elLeft.innerHTML='<span class="done-n">'+(tasks.length-done)+'</span>';
   var elPct=document.getElementById('dd-pct');if(elPct)elPct.innerHTML='<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
   var html=(tasks.length===0&&repeats.length===0)?'<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 날의 업무를 추가해보세요</div>':'';
-  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정</div>';
+  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정 · ⠿ 끌어서 일간↔주간 이동</div>';
   tasks.forEach(function(t,i){
     var isMtg=t.isMeeting||t.tag==='미팅';
     var repBadge=t.repeat?'<span class="repeat-badge" title="이 일정은 반복됩니다">🔁 '+t.repeat+'</span>':'';
-    html+='<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="_dDrag='+i+'" ondragover="event.preventDefault();event.currentTarget.classList.add(\'drag-over\')" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="_dropDaily(event,'+i+')">'
+    html+='<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="_dDrag='+i+';_wDrag=null" ondragend="_dDrag=null" ondragover="event.preventDefault();event.currentTarget.classList.add(\'drag-over\')" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="_dropDaily(event,'+i+')">'
       +'<span class="drag-handle">⠿</span>'
       +(isMtg?'<span class="meeting-badge">📅'+(t.meetingTime?' '+t.meetingTime:'')+'</span>':'')
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleDailyByIdx('+i+')"></div>'
@@ -1921,6 +1921,8 @@ function jumpToRepeatSrc(ds){
 }
 function _dropDaily(e,i){
   e.preventDefault();e.currentTarget.classList.remove('drag-over');
+  if(_dDrag===null)return; /* 주간 업무를 끌어온 경우 → 목록(_xDrop)이 처리 */
+  e.stopPropagation();
   var from=_dDrag;_dDrag=null;
   reorderDaily(selDailyDate,from,i);
 }
@@ -2028,9 +2030,9 @@ function renderWeeklyTasks(){
   document.getElementById('wd-left').innerHTML='<span class="done-n">'+(tasks.length-done)+'</span>';
   document.getElementById('wd-pct').innerHTML='<span class="done-n">'+(tasks.length?Math.round(done/tasks.length*100):0)+'%</span>';
   var html=tasks.length===0?'<div style="color:var(--text3);font-size:13px;padding:8px 0;">이 주의 업무를 추가해보세요</div>':'';
-  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정</div>';
+  if(tasks.length>0) html+='<div class="edit-hint">💡 업무명 더블클릭하면 수정 · ⠿ 끌어서 일간↔주간 이동</div>';
   tasks.forEach(function(t,i){
-    html+='<div class="item-row" draggable="true" ondragstart="_wDrag='+i+'" ondragover="event.preventDefault()" ondrop="_dropWeekly(event,'+i+')">'
+    html+='<div class="item-row" draggable="true" ondragstart="_wDrag='+i+';_dDrag=null" ondragend="_wDrag=null" ondragover="event.preventDefault()" ondrop="_dropWeekly(event,'+i+')">'
       +'<span class="drag-handle">⠿</span>'
       +'<div class="cb'+(t.done?' done':'')+'" onclick="toggleWeeklyByIdx('+i+')"></div>'
       +'<span class="item-text'+(t.done?' struck':'')+'" ondblclick="startEditWeekly('+i+',this)">'+escHtml(stripMk(t.text))+'</span>'
@@ -2041,7 +2043,73 @@ function renderWeeklyTasks(){
   });
   document.getElementById('weekly-list').innerHTML=html;
 }
-function _dropWeekly(e,i){e.preventDefault();if(_wDrag===null||_wDrag===i)return;var arr=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var m=arr.splice(_wDrag,1)[0];arr.splice(i,0,m);cache.weekly[selWeekKey]=arr;_wDrag=null;renderWeeklyTasks();}
+function _dropWeekly(e,i){e.preventDefault();if(_wDrag===null)return;e.stopPropagation();if(_wDrag===i){_wDrag=null;return;}var arr=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var m=arr.splice(_wDrag,1)[0];arr.splice(i,0,m);cache.weekly[selWeekKey]=arr;_wDrag=null;renderWeeklyTasks();}
+/* ── 일간 ↔ 주간 업무 드래그 이동 (2026-11-23) ──
+   일간 업무를 주간 목록에 놓으면 지금 보고 있는 주로, 주간 업무를 일간 목록에 놓으면 지금 보고 있는 날짜로 옮긴다.
+   두 목록은 노션 DB가 달라 '새로 만들고 → 원본 삭제'로 이동(이름·태그·우선순위·완료·노트 유지). */
+function _xDragOver(e,to){
+  var cross=(to==='daily'&&_wDrag!==null)||(to==='weekly'&&_dDrag!==null);
+  if(!cross)return;
+  e.preventDefault();try{e.dataTransfer.dropEffect='move';}catch(_){}
+  e.currentTarget.classList.add('drag-over-card');
+}
+function _xDragLeave(e){if(e.currentTarget.contains(e.relatedTarget))return;e.currentTarget.classList.remove('drag-over-card');}
+function _xDrop(e,to){
+  e.currentTarget.classList.remove('drag-over-card');
+  if(to==='daily'&&_wDrag!==null){e.preventDefault();var i=_wDrag;_wDrag=null;moveWeeklyToDaily(i);}
+  else if(to==='weekly'&&_dDrag!==null){e.preventDefault();var j=_dDrag;_dDrag=null;moveDailyToWeekly(j);}
+}
+async function moveWeeklyToDaily(i){
+  var wk=selWeekKey,t=(cache.weekly[wk]||[]).slice().sort(priSort)[i];if(!t)return;
+  if(String(t.id).indexOf('temp-')===0){setSync('error','저장 중인 업무예요. 잠시 후 다시 옮겨 주세요');return;}
+  var ds=selDailyDate;
+  if((cache.daily[ds]||[]).some(function(x){return x.text===t.text;})){alert('그 날짜에 같은 업무가 이미 있어요!');return;}
+  var opt={id:'temp-'+Date.now(),text:t.text,done:!!t.done,tag:t.tag||'업무',pri:t.pri||'보통',isMeeting:t.tag==='미팅',meetingTime:'',isCarried:false,repeat:'',note:t.note||'',ord:null};
+  cache.weekly[wk]=(cache.weekly[wk]||[]).filter(function(x){return x!==t;});
+  if(!cache.daily[ds])cache.daily[ds]=[];cache.daily[ds].push(opt);
+  renderDailyTasks();renderWeeklyTasks();renderCal();renderDashboard();
+  setSync('syncing','이동 중...');
+  try{
+    var props={'업무':pTitle(t.text),'태그':pSelect(opt.tag),'우선순위':pSelect(opt.pri),'완료':pCheck(opt.done),'날짜':pDate(ds)};
+    if(opt.note)props['노트']=pText(opt.note);
+    opt.id=await createPage(DB.daily,props);
+    await deletePage(t.id);
+    setSync('ok','주간 → '+ds+' 이동 ✓  '+new Date().toLocaleTimeString());
+  }catch(err){
+    if(String(opt.id).indexOf('temp-')===0){ /* 새 항목을 못 만들었으면 원래대로 */
+      cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x!==opt;});
+      (cache.weekly[wk]=cache.weekly[wk]||[]).push(t);
+    }
+    setSync('error','❌ 이동 실패: '+err.message);console.error('주간→일간 이동 실패',err);
+    renderDailyTasks();renderWeeklyTasks();renderCal();renderDashboard();
+  }
+}
+async function moveDailyToWeekly(i){
+  var ds=selDailyDate,t=getDailyOrdered(ds)[i];if(!t)return;
+  if(String(t.id).indexOf('temp-')===0){setSync('error','저장 중인 업무예요. 잠시 후 다시 옮겨 주세요');return;}
+  if(t.repeat){alert('반복 일정은 주간 업무로 옮길 수 없어요.');return;}
+  var wk=selWeekKey,parts=wk.split(' '),wkPart=parts[parts.length-1],ymPart=parts.slice(0,-1).join(' ');
+  if((cache.weekly[wk]||[]).some(function(x){return x.text===t.text;})){alert('그 주에 같은 업무가 이미 있어요!');return;}
+  var opt={id:'temp-'+Date.now(),text:t.text,done:!!t.done,tag:t.tag||'업무',pri:t.pri||'보통',note:t.note||''};
+  cache.daily[ds]=(cache.daily[ds]||[]).filter(function(x){return x!==t;});
+  if(!cache.weekly[wk])cache.weekly[wk]=[];cache.weekly[wk].push(opt);
+  renderDailyTasks();renderWeeklyTasks();renderCal();renderDashboard();
+  setSync('syncing','이동 중...');
+  try{
+    var props={'업무':pTitle(t.text),'연월':pText(ymPart),'주차':pSelect(wkPart),'태그':pSelect(opt.tag),'우선순위':pSelect(opt.pri),'완료':pCheck(opt.done)};
+    if(opt.note)props['노트']=pText(opt.note);
+    opt.id=await createPage(DB.weekly,props);
+    await deletePage(t.id);
+    setSync('ok','일간 → '+wk+' 이동 ✓  '+new Date().toLocaleTimeString());
+  }catch(err){
+    if(String(opt.id).indexOf('temp-')===0){
+      cache.weekly[wk]=(cache.weekly[wk]||[]).filter(function(x){return x!==opt;});
+      (cache.daily[ds]=cache.daily[ds]||[]).push(t);
+    }
+    setSync('error','❌ 이동 실패: '+err.message);console.error('일간→주간 이동 실패',err);
+    renderDailyTasks();renderWeeklyTasks();renderCal();renderDashboard();
+  }
+}
 function cycleWeeklyPri(i){var tasks=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=tasks[i];if(!t)return;var cycle=['높음','보통','낮음'],next=cycle[(cycle.indexOf(t.pri)+1)%3];var orig=(cache.weekly[selWeekKey]||[]).find(function(x){return x.id===t.id;});if(orig){orig.pri=next;renderWeeklyTasks();withSync(function(){return updatePage(orig.id,{'우선순위':pSelect(next)});});}}
 function selWeekByIdx(i){if(_weekKeyList[i])selWeekKey=_weekKeyList[i];checkWeeklyCarryOver();renderWeeklyTasks();}
 function toggleWeeklyByIdx(i){var s=(cache.weekly[selWeekKey]||[]).slice().sort(priSort);var t=s[i];if(t)doToggleWeekly(t.id,selWeekKey);}
