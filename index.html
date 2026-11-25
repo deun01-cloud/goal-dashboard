@@ -1534,7 +1534,8 @@ function renderDashboard(){
     if(tdSorted.length===0){
       mobileList.innerHTML='<div style="color:var(--text3);font-size:13px;padding:4px 0;">오늘 업무가 없습니다. 아래에서 추가해보세요!</div>';
     } else {
-      mobileList.innerHTML=tdSorted.map(function(t,i){
+      /* [2026-11-25] 대시보드 오늘 할 일도 오전/오후로 나눔 — 구역에 놓으면 그 시간대로(주간 업무는 그 시간대로 추가) */
+      var _row=function(t,i){
         var isMtg=t.isMeeting||t.tag==='미팅';
         return'<div class="item-row'+(isMtg?' meeting-row':'')+'" draggable="true" ondragstart="dashTodayDragStart(event,'+i+')" ondragend="_dashTodayDragIdx=null" ondragover="dashTodayDragOver(event)" ondragleave="event.currentTarget.classList.remove(\'drag-over\')" ondrop="dashTodayDrop(event,'+i+')" style="cursor:grab;">'
           +'<span style="color:var(--text3);font-size:12px;padding:0 4px;flex-shrink:0;">⠿</span>'
@@ -1543,6 +1544,14 @@ function renderDashboard(){
           +'<span class="item-text'+(t.done?' struck':'')+'">'+escHtml(stripMk(t.text))+'</span>'
           +'<span class="'+tagCls(t.tag)+'">'+t.tag+'</span>'
           +'<span class="'+priCls(t.pri)+'">'+t.pri+'</span></div>';
+      };
+      mobileList.innerHTML=HALVES.map(function(h){
+        var idx=[];tdSorted.forEach(function(t,i){if(halfOf(t)===h)idx.push(i);});
+        var hd=idx.filter(function(i){return tdSorted[i].done;}).length;
+        return '<div class="half-sec" ondragover="_dashHalfOver(event)" ondragleave="_xDragLeave(event)" ondrop="_dashHalfDrop(event,\''+h+'\')">'
+          +'<div class="half-head"><span class="half-name">'+(h==='오전'?'☀️ 오전':'🌙 오후')+'</span><span class="half-n">'+hd+'/'+idx.length+'</span></div>'
+          +(idx.length?idx.map(function(i){return _row(tdSorted[i],i);}).join(''):'<div class="half-empty">여기로 끌어 놓기</div>')
+          +'</div>';
       }).join('');
     }
   }
@@ -1671,6 +1680,18 @@ function dashTodayDrop(e,i){
   reorderDaily(todayStr(),from,i);
 }
 
+function _dashHalfOver(e){if(_dashTodayDragIdx===null&&_dashWeekDragIdx===null)return;e.preventDefault();e.currentTarget.classList.add('drag-over-card');}
+async function _dashHalfDrop(e,h){
+  e.currentTarget.classList.remove('drag-over-card');
+  var card=document.getElementById('dash-today-mobile');if(card)card.style.borderColor='var(--border)';
+  if(_dashWeekDragIdx!==null){e.preventDefault();e.stopPropagation();await dropWeekToDaily(e,h);return;}
+  if(_dashTodayDragIdx===null)return;
+  e.preventDefault();e.stopPropagation();
+  var t=getDailyOrdered(todayStr())[_dashTodayDragIdx];_dashTodayDragIdx=null;if(!t||halfOf(t)===h)return;
+  t.half=h;t.ord=null;renderDailyTasks();renderDashboard();
+  if(String(t.id).indexOf('temp-')===0)return;
+  withSync(function(){return updatePage(t.id,{'시간대':pSelect(h)});});
+}
 /* 주간→오늘 드래그 */
 var _dashWeekDragIdx=null;
 function dashWeekDragStart(e,i){
@@ -1678,7 +1699,7 @@ function dashWeekDragStart(e,i){
   try{e.dataTransfer.setData('text/plain',String(i));}catch(_){}
   e.dataTransfer.effectAllowed='copy';
 }
-async function dropWeekToDaily(e){
+async function dropWeekToDaily(e,half){
   e.preventDefault();
   if(_dashWeekDragIdx===null)return;
   var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';
@@ -1690,7 +1711,7 @@ async function dropWeekToDaily(e){
   var exists=(cache.daily[todayStr()]||[]).some(function(x){return x.text===t.text;});
   if(exists){alert('이미 오늘 업무에 있어요!');return;}
   selDailyDate=todayStr();
-  await _addDailyRaw(t.text,t.tag,t.pri,false,'',false);
+  await _addDailyRaw(t.text,t.tag,t.pri,false,'',false,'',catOf(t),half||nowHalf());
   renderDailyTasks();renderCal();renderDashboard();
 }
 
@@ -1716,7 +1737,7 @@ async function addTodayMobile(){
   var v=inp?inp.value.trim():'';if(!v)return;
   if(inp)inp.value='';
   selDailyDate=todayStr();
-  await _addDailyRaw(v,'업무','높음',false,'',false);
+  await _addDailyRaw(v,'업무','높음',false,'',false,'','',nowHalf());   /* 지금 시간대(오전/오후)로 추가 */
   renderDailyTasks();renderCal();renderDashboard();
 }
 function dashToggleWeekly(i){var wKey=getYM(todayStr())+' '+getWeekNum(todayStr())+'주';var s=getWeeklyOrdered(wKey);var t=s[i];if(t)doToggleWeekly(t.id,wKey);}
